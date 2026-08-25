@@ -1,0 +1,668 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Pacote ↔ Socket ↔ Processo</title>
+<style>
+  :root{
+    --bg:#f3f5f8; --panel:#ffffff; --line:#e3e8ef; --ink:#232838; --muted:#7c8695;
+    --blue:#3f6fa8; --blue-soft:#eaf1f8;
+    --violet:#7c6fb0; --violet-soft:#f2eff9;
+    --green:#4b9a6f; --green-soft:#e9f6f0;
+    --amber:#c9873a; --amber-soft:#faf1e2;
+    --red:#c15b5b; --red-soft:#f9ecec;
+    --teal:#2f8f88; --teal-soft:#e6f4f2;
+    --mono:'JetBrains Mono','Fira Code',ui-monospace,Menlo,monospace;
+    --sans:'IBM Plex Sans','Segoe UI',system-ui,sans-serif;
+    --shadow: 0 1px 2px rgba(16,24,40,.04), 0 2px 8px rgba(16,24,40,.05);
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--sans);-webkit-font-smoothing:antialiased;}
+  body{padding:32px 16px 64px;}
+  .wrap{max-width:1080px;margin:0 auto;position:relative;}
+  .eyebrow{font-family:var(--mono);font-size:12px;letter-spacing:.12em;text-transform:uppercase;color:var(--amber);margin:0 0 8px;}
+  h1{font-size:clamp(22px,3.2vw,32px);line-height:1.2;margin:0 0 10px;font-weight:700;letter-spacing:-.01em;color:#171b26;}
+  h1 em{font-style:normal;color:var(--blue);}
+  p.lede{color:var(--muted);max-width:700px;font-size:15px;line-height:1.6;margin:0;}
+
+  .banner{
+    margin:18px 0 6px;padding:12px 16px;border:1px solid #e6c793;background:var(--amber-soft);
+    border-radius:10px;font-size:12.5px;line-height:1.55;color:#7a5215;
+  }
+  .banner b{color:#9c6a20;}
+
+  .tabs{display:flex;flex-wrap:wrap;gap:8px;margin:20px 0 18px;}
+  .tab{
+    font-family:var(--mono);font-size:12px;background:#fff;color:var(--muted);
+    border:1px solid var(--line);padding:10px 14px;border-radius:9px;cursor:pointer;transition:.15s ease;
+  }
+  .tab:hover{border-color:var(--blue);color:var(--blue);}
+  .tab.active{background:var(--blue);border-color:var(--blue);color:#fff;font-weight:600;}
+
+  .controls{display:flex;flex-wrap:wrap;gap:10px;align-items:center;margin:0 0 20px;padding:14px 16px;background:var(--panel);border:1px solid var(--line);border-radius:12px;box-shadow:var(--shadow);}
+  button.act{font-family:var(--mono);font-size:12.5px;background:#fff;color:var(--ink);border:1px solid var(--line);padding:10px 16px;border-radius:8px;cursor:pointer;transition:.15s ease;}
+  button.act:hover:not(:disabled){border-color:var(--blue);color:var(--blue);}
+  button.act:disabled{opacity:.4;cursor:default;}
+  button.act.primary{background:var(--amber-soft);border-color:#e6c793;color:#9c6a20;}
+  button.act.primary:hover:not(:disabled){background:#f6e6c6;}
+  button.act.tealbtn{background:var(--teal-soft);border-color:#a9d6d1;color:#1f6b64;}
+  button.act.tealbtn:hover:not(:disabled){background:#d4ece9;}
+
+  .grid{display:grid;grid-template-columns: 1.15fr .85fr;gap:20px;}
+  @media (max-width:860px){.grid{grid-template-columns:1fr;}}
+  .grid3{display:grid;grid-template-columns: 1fr 1fr 1fr;gap:18px;}
+  @media (max-width:980px){.grid3{grid-template-columns:1fr;}}
+
+  .panel{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:18px 18px 20px;box-shadow:var(--shadow);}
+  .panel h2{font-family:var(--mono);font-size:11.5px;letter-spacing:.07em;text-transform:uppercase;color:var(--muted);margin:0 0 12px;font-weight:600;}
+
+  .packet{
+    font-family:var(--mono); font-size:12.5px; border:1px solid var(--line); border-radius:10px;
+    background:var(--amber-soft); padding:14px 16px; margin-bottom:16px; position:relative;
+  }
+  .packet .tag{position:absolute;top:-9px;left:12px;background:var(--bg);padding:0 6px;color:var(--amber);font-size:10px;letter-spacing:.08em;}
+  .row{display:flex;justify-content:space-between;gap:10px;padding:3px 0;}
+  .row .k{color:var(--muted);}
+  .row .v{color:var(--ink);}
+  .row .v.hl{color:#a06a1a;font-weight:600;}
+  .body-block{margin-top:8px;padding-top:8px;border-top:1px dashed #e6c793;}
+  .body-block .k{display:block;color:var(--muted);margin-bottom:5px;}
+  .body-code{
+    background:#fffaf1;border:1px solid #eeddb9;border-radius:6px;padding:8px 10px;
+    color:#7a5215;white-space:pre-wrap;line-height:1.45;font-size:11.5px;
+  }
+
+  table{width:100%;border-collapse:collapse;font-family:var(--mono);font-size:11.5px;}
+  th{text-align:left;color:var(--muted);font-weight:500;font-size:10px;letter-spacing:.05em;text-transform:uppercase;padding:5px 6px;border-bottom:1px solid var(--line);}
+  td{padding:8px 6px;border-bottom:1px solid #eef1f5;color:var(--ink);}
+  tr.sk-row{transition:background .25s ease, box-shadow .25s ease;}
+  tr.sk-row.checking{background:var(--blue-soft);}
+  tr.sk-row.match{background:var(--violet-soft); box-shadow: inset 3px 0 0 var(--violet);}
+  tr.sk-row.nomatch-flash{background:var(--red-soft);}
+  .state{font-size:10.5px;padding:2px 7px;border-radius:5px;font-weight:600;}
+  .state.LISTEN{background:var(--green-soft);color:var(--green);}
+  .state.ESTABLISHED{background:var(--blue-soft);color:var(--blue);}
+
+  .struct{
+    font-family:var(--mono); font-size:12.5px; border:1px solid var(--line); border-radius:10px;
+    background:var(--violet-soft); padding:16px 18px; min-height:200px;
+    opacity:0; transform:translateY(8px) scale(.98);
+    transition:opacity .35s ease, transform .35s ease;
+  }
+  .struct.open{opacity:1; transform:translateY(0) scale(1);}
+  .struct .kw{color:#8b93a3;}
+  .struct .type{color:var(--blue);}
+  .struct .name{color:var(--ink);}
+  .struct .val{color:#a06a1a; font-weight:600;}
+  .struct .val.v2{color:var(--violet);}
+  .struct .comment{color:#9aa2b0;font-style:italic;}
+  .struct .field{display:flex;justify-content:space-between;gap:12px;padding:3px 0;opacity:.25;transition:opacity .3s ease;}
+  .struct .field.filled{opacity:1;}
+  .struct-title{color:var(--blue);margin-bottom:8px;}
+  .queue-note{
+    margin-top:4px;padding:8px 10px;border-radius:6px;background:#fffaf1;border:1px solid #eeddb9;
+    color:#7a5215;font-size:11px;white-space:pre-wrap;opacity:0;transition:opacity .3s ease;min-height:16px;
+  }
+  .queue-note.filled{opacity:1;}
+  .queue-note.empty{color:#b8a98a;font-style:italic;}
+  .placeholder{color:var(--muted);font-family:var(--mono);font-size:12px;text-align:center;padding:44px 10px;}
+
+  /* processo card */
+  .proc{
+    font-family:var(--mono); font-size:12.5px; border:1px solid #a9d6d1; border-radius:10px;
+    background:var(--teal-soft); padding:16px 18px; min-height:200px;
+  }
+  .proc-title{color:var(--teal);font-weight:700;margin-bottom:4px;}
+  .proc-sub{color:#4d8a84;font-size:11px;margin-bottom:10px;}
+  .fd-table{width:100%;font-size:11px;border-collapse:collapse;margin-bottom:10px;}
+  .fd-table td{padding:3px 4px;border-bottom:1px solid #cfe9e5;color:#1f6b64;}
+  .fd-table td.dim{color:#7fb0aa;}
+  .fd-table tr.active-fd{background:#d4ece9;}
+  .code-line{
+    background:#0e2b28;color:#a9e8de;font-family:var(--mono);font-size:12px;
+    padding:8px 10px;border-radius:6px;margin:8px 0;white-space:pre-wrap;line-height:1.5;
+  }
+  .code-line .cmt{color:#5f9c93;}
+  .userbuf{
+    margin-top:6px;padding:8px 10px;border-radius:6px;background:#fff;border:1px solid #cfe9e5;
+    color:#1f6b64;white-space:pre-wrap;line-height:1.45;font-size:11.5px;min-height:16px;
+  }
+  .userbuf.empty{color:#9fc7c1;font-style:italic;}
+  .badge-warn{
+    display:inline-block;font-family:var(--mono);font-size:10px;letter-spacing:.03em;
+    background:var(--red-soft);color:#a34747;padding:1px 6px;border-radius:5px;margin-left:6px;vertical-align:middle;
+  }
+
+  .caption{margin-top:22px;padding:16px 18px;background:var(--panel);border:1px solid var(--line);border-radius:12px;font-size:13.5px;line-height:1.65;color:var(--ink);box-shadow:var(--shadow);}
+  .caption code{font-family:var(--mono);font-size:12px;color:var(--blue);background:var(--blue-soft);padding:1px 5px;border-radius:4px;}
+  .caption b{color:#a06a1a;}
+  .caption b.v{color:var(--violet);}
+  .caption b.t{color:var(--teal);}
+  .caption .nota{display:block;margin-top:10px;padding-top:10px;border-top:1px dashed var(--line);color:var(--muted);font-size:12.5px;}
+
+  .flying{
+    position:absolute; width:14px; height:14px; border-radius:4px;
+    z-index: 20; pointer-events:none;
+    transition: left .75s cubic-bezier(.4,0,.2,1), top .75s cubic-bezier(.4,0,.2,1), opacity .25s ease;
+  }
+  .flying.amber{background: var(--amber); box-shadow: 0 2px 6px rgba(201,135,58,.5);}
+  .flying.violet{background: var(--violet); box-shadow: 0 2px 6px rgba(124,111,176,.5);}
+  .flying.teal{background: var(--teal); box-shadow: 0 2px 6px rgba(47,143,136,.5);}
+
+  .tabpanel{display:none;}
+  .tabpanel.active{display:block;}
+</style>
+</head>
+<body>
+<div class="wrap" id="wrap">
+
+  <header>
+    <p class="eyebrow">por dentro do kernel</p>
+    <h1>Entre o pacote e o processo, sempre existe um <em>socket</em></h1>
+    <p class="lede">O processo nunca fala direto com a rede, e a rede nunca fala direto com o processo. Existe sempre um intermediário no meio — o socket (dentro dele, uma <code style="color:var(--violet)">struct sock</code> no kernel). É <b style="color:var(--amber)">pacote ↔ socket ↔ processo</b>, nunca pacote → processo.</p>
+  </header>
+
+  <div class="banner">
+    ⚠ <b>Isto é uma visualização abstrata e didática</b>, não uma simulação fiel do kernel. Muita coisa real foi
+    deixada de fora de propósito — segmentação/reassemble de TCP, buffers de anel da placa de rede, DMA, IRQ,
+    softirqs, cópias entre espaço de kernel e espaço de usuário, <code style="color:#9c6a20">accept()</code> criando
+    um socket novo, controle de congestionamento, etc. O único objetivo aqui é fixar a ideia central: quem recebe o
+    pacote é o <b>socket</b>, não o processo — e o processo só enxerga o que o socket entrega quando ele pede
+    (<code style="color:#9c6a20">read</code>/<code style="color:#9c6a20">recv</code>) ou manda
+    (<code style="color:#9c6a20">write</code>/<code style="color:#9c6a20">send</code>).
+  </div>
+
+  <div class="tabs">
+    <button class="tab active" data-tab="1">1 · pacote chegando → socket</button>
+    <button class="tab" data-tab="2">2 · socket → processo (read)</button>
+    <button class="tab" data-tab="3">3 · processo → socket → rede (write)</button>
+  </div>
+
+  <!-- ===================== TAB 1 ===================== -->
+  <section class="tabpanel active" id="tab1">
+    <div class="controls">
+      <button class="act primary" id="btnGen">→ pacote chegando</button>
+      <button class="act" id="btnReset1">↺ reiniciar</button>
+    </div>
+
+    <div class="grid">
+      <div class="panel">
+        <h2>pacote chegando</h2>
+        <div class="packet" id="packetCard">
+          <span class="tag">IP + TCP header</span>
+          <div class="row"><span class="k">origem</span><span class="v hl" id="pSrc">—</span></div>
+          <div class="row"><span class="k">destino</span><span class="v hl" id="pDst">—</span></div>
+          <div class="row"><span class="k">protocolo</span><span class="v" id="pProto">—</span></div>
+          <div class="row"><span class="k">flags</span><span class="v" id="pFlags">—</span></div>
+          <div class="body-block">
+            <span class="k">corpo (payload HTTP)</span>
+            <div class="body-code" id="pBody">—</div>
+          </div>
+        </div>
+
+        <h2>tabela de sockets abertos <span style="color:#a7afbc;font-weight:400;">(como <code style="color:var(--muted)">ss -tn</code>)</span></h2>
+        <table>
+          <thead><tr><th>proto</th><th>estado</th><th>local</th><th>remoto</th></tr></thead>
+          <tbody id="skTable"></tbody>
+        </table>
+      </div>
+
+      <div class="panel">
+        <h2>struct sock encontrada</h2>
+        <div id="structHolder">
+          <div class="placeholder">clique em<br>"pacote chegando"</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="caption">
+      O pacote carrega 4 números + 1 protocolo — <b>IP origem</b>, <b>porta origem</b>, <b>IP destino</b>, <b>porta destino</b> — mais o corpo que ele transporta. O kernel compara essa <b>5-tupla</b> com a tabela de sockets abertos: se achar uma <b class="v">ESTABLISHED</b> com tupla idêntica, entrega ali; senão cai numa <b style="color:var(--green)">LISTEN</b> que só olha a porta local. O corpo do pacote fica <b>na fila do socket</b> — não vai para o processo sozinho. O processo só recebe esse conteúdo quando ele mesmo pede, o que a próxima aba mostra.
+      <span class="nota">Simplificação: não representamos o <code>three-way handshake</code>, nem a criação de um socket novo via <code>accept()</code> para cada conexão — tratamos o socket ESTABLISHED como se já existisse pronto.</span>
+    </div>
+  </section>
+
+  <!-- ===================== TAB 2 ===================== -->
+  <section class="tabpanel" id="tab2">
+    <div class="controls">
+      <button class="act primary" id="btnFill2">① novo pacote chega na fila do socket</button>
+      <button class="act tealbtn" id="btnRead2" disabled>② processo chama read(fd, buf, 1024)</button>
+      <button class="act" id="btnReset2">↺ reiniciar</button>
+    </div>
+
+    <div class="grid">
+      <div class="panel">
+        <h2>struct sock (espaço de kernel)</h2>
+        <div id="sockHolder2"></div>
+      </div>
+
+      <div class="panel">
+        <h2>processo (espaço de usuário)</h2>
+        <div id="procHolder2"></div>
+      </div>
+    </div>
+
+    <div class="caption">
+      O processo não sabe, por conta própria, que chegou um pacote — ele só tem um <b>file descriptor</b> (<code>fd</code>) que aponta para um socket. Quando chama <code style="color:var(--teal)">read(fd, buf, ...)</code>, ele está pedindo ao kernel: "copie o que estiver esperando nesse socket para dentro do meu buffer". Antes disso, os bytes ficam <b class="v">só dentro do kernel</b>, na <code>sk_receive_queue</code> — o processo não enxerga IP, porta nem cabeçalho nenhum, só o corpo que sobrou.
+      <span class="nota">Simplificação: na vida real <code>read()</code> pode retornar menos bytes do que foi pedido, pode bloquear esperando dado chegar (ou não, se o socket for non-blocking), e a cópia kernel→usuário é uma operação de baixo nível própria — aqui tratamos como um pulo instantâneo e completo.</span>
+    </div>
+  </section>
+
+  <!-- ===================== TAB 3 ===================== -->
+  <section class="tabpanel" id="tab3">
+    <div class="controls">
+      <button class="act primary" id="btnPrep3">① processo prepara a resposta</button>
+      <button class="act tealbtn" id="btnWrite3" disabled>② processo chama write(fd, resp, len)</button>
+      <button class="act" id="btnSend3" disabled>③ kernel monta e envia o pacote</button>
+      <button class="act" id="btnReset3">↺ reiniciar</button>
+    </div>
+
+    <div class="grid3">
+      <div class="panel">
+        <h2>processo (espaço de usuário)</h2>
+        <div id="procHolder3"></div>
+      </div>
+      <div class="panel">
+        <h2>struct sock (espaço de kernel)</h2>
+        <div id="sockHolder3"></div>
+      </div>
+      <div class="panel">
+        <h2>pacote saindo pela rede</h2>
+        <div id="outHolder3">
+          <div class="placeholder">aguardando<br>write()</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="caption">
+      O caminho é o mesmo, ao contrário. O processo escreve num buffer seu (memória do próprio processo) e chama <code style="color:var(--teal)">write(fd, ...)</code>. O kernel copia esses bytes para a fila de envio do socket (<code>sk_write_queue</code>), e só depois monta o pacote de verdade — adicionando os cabeçalhos IP/TCP, agora com origem e destino <b>invertidos</b> em relação ao pacote que chegou — para entregar à placa de rede.
+      <span class="nota">Simplificação: pulamos segmentação em MSS, cálculo de checksum, controle de janela/congestionamento, ARP, e a fila real do driver da placa de rede — aqui é só "processo escreve → socket guarda → kernel empacota e manda".</span>
+    </div>
+  </section>
+
+</div>
+
+<script>
+(function(){
+  const wrap = document.getElementById('wrap');
+
+  const LOCAL_IP = '10.0.0.5';
+  const sockets = [
+    { proto:'tcp', state:'LISTEN',      local:`${LOCAL_IP}:22`,  remote:'0.0.0.0:*' },
+    { proto:'tcp', state:'LISTEN',      local:`${LOCAL_IP}:443`, remote:'0.0.0.0:*' },
+    { proto:'tcp', state:'ESTABLISHED', local:`${LOCAL_IP}:443`, remote:'187.4.201.9:51422' },
+    { proto:'tcp', state:'LISTEN',      local:`${LOCAL_IP}:5432`,remote:'0.0.0.0:*' },
+  ];
+  const DATA_SOCK = sockets[2]; // socket ESTABLISHED usado nas abas 2 e 3
+  const PROCESS = { pid: 4021, name: 'nginx: worker process' };
+
+  const httpBodies = [
+    'GET /index.html HTTP/1.1\nHost: site.exemplo',
+    'GET /api/usuarios HTTP/1.1\nHost: site.exemplo',
+    'POST /login HTTP/1.1\nHost: site.exemplo\n\nuser=ana&senha=••••••',
+    'GET /favicon.ico HTTP/1.1\nHost: site.exemplo',
+    'GET /produtos?pag=2 HTTP/1.1\nHost: site.exemplo'
+  ];
+  const httpResponses = [
+    'HTTP/1.1 200 OK\nContent-Type: text/html\n\n<h1>bem-vindo</h1>',
+    'HTTP/1.1 200 OK\nContent-Type: application/json\n\n{"usuarios":[...]}',
+    'HTTP/1.1 302 Found\nLocation: /painel',
+    'HTTP/1.1 404 Not Found\nContent-Type: text/html\n\n<h1>não encontrado</h1>'
+  ];
+
+  function randIp(){
+    return `${20+Math.floor(Math.random()*180)}.${Math.floor(Math.random()*255)}.${Math.floor(Math.random()*255)}.${Math.floor(Math.random()*255)}`;
+  }
+  function randEphemeralPort(){
+    return 1024 + Math.floor(Math.random()*(65535-1024));
+  }
+  function pick(arr){ return arr[Math.floor(Math.random()*arr.length)]; }
+
+  function flyDot(fromEl, toEl, colorClass, onArrive){
+    const wr = wrap.getBoundingClientRect();
+    const fr = fromEl.getBoundingClientRect();
+    const to = toEl.getBoundingClientRect();
+    const el = document.createElement('div');
+    el.className = 'flying ' + colorClass;
+    const startX = fr.left - wr.left + fr.width/2 - 7;
+    const startY = fr.top - wr.top + fr.height/2 - 7;
+    el.style.left = startX + 'px';
+    el.style.top = startY + 'px';
+    wrap.appendChild(el);
+
+    requestAnimationFrame(() => {
+      const endX = to.left - wr.left + to.width/2 - 7;
+      const endY = to.top - wr.top + to.height/2 - 7;
+      el.style.left = endX + 'px';
+      el.style.top = endY + 'px';
+    });
+
+    setTimeout(() => {
+      el.style.opacity = '0';
+      setTimeout(() => { el.remove(); if(onArrive) onArrive(); }, 220);
+    }, 780);
+  }
+
+  /* ---------------- TABS ---------------- */
+  const tabBtns = document.querySelectorAll('.tab');
+  const panels = { '1': document.getElementById('tab1'), '2': document.getElementById('tab2'), '3': document.getElementById('tab3') };
+  tabBtns.forEach(btn => {
+    btn.addEventListener('click', () => {
+      tabBtns.forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      Object.values(panels).forEach(p => p.classList.remove('active'));
+      panels[btn.dataset.tab].classList.add('active');
+    });
+  });
+
+  /* ================= TAB 1 ================= */
+  (function(){
+    const skTable = document.getElementById('skTable');
+    const structHolder = document.getElementById('structHolder');
+    const btnGen = document.getElementById('btnGen');
+    const btnReset = document.getElementById('btnReset1');
+    const packetCard = document.getElementById('packetCard');
+    const pSrc = document.getElementById('pSrc');
+    const pDst = document.getElementById('pDst');
+    const pProto = document.getElementById('pProto');
+    const pFlags = document.getElementById('pFlags');
+    const pBody = document.getElementById('pBody');
+
+    function renderTable(){
+      skTable.innerHTML = '';
+      sockets.forEach((s, i) => {
+        const tr = document.createElement('tr');
+        tr.className = 'sk-row';
+        tr.dataset.idx = i;
+        tr.innerHTML = `<td>${s.proto}</td><td><span class="state ${s.state}">${s.state}</span></td><td>${s.local}</td><td>${s.remote}</td>`;
+        skTable.appendChild(tr);
+      });
+    }
+    renderTable();
+
+    function fillStruct(sk, bodyText){
+      const [localIp, localPort] = sk.local.split(':');
+      const remoteParts = sk.remote.split(':');
+      const remoteIp = remoteParts[0] === '0.0.0.0' ? '— (aceita qualquer)' : remoteParts[0];
+      const remotePort = remoteParts[1] === '*' ? '— (aceita qualquer)' : remoteParts[1];
+
+      structHolder.innerHTML = `
+        <div class="struct" id="structCard">
+          <div class="struct-title"><span class="kw">struct</span> <span class="type">sock</span> {</div>
+          <div class="field" data-d="0"><span><span class="kw">sa_family_t</span> <span class="name">sk_family</span></span><span class="val">AF_INET</span></div>
+          <div class="field" data-d="1"><span><span class="kw">__u8</span> <span class="name">sk_protocol</span></span><span class="val">IPPROTO_TCP</span></div>
+          <div class="field" data-d="2"><span><span class="kw">int</span> <span class="name">sk_state</span></span><span class="val v2">${sk.state}</span></div>
+          <div class="field" data-d="3"><span><span class="kw">__be32</span> <span class="name">inet_rcv_saddr</span> <span class="comment">// IP local</span></span><span class="val">${localIp}</span></div>
+          <div class="field" data-d="4"><span><span class="kw">__be16</span> <span class="name">inet_sport</span> <span class="comment">// porta local</span></span><span class="val">${localPort}</span></div>
+          <div class="field" data-d="5"><span><span class="kw">__be32</span> <span class="name">inet_daddr</span> <span class="comment">// IP remoto</span></span><span class="val v2">${remoteIp}</span></div>
+          <div class="field" data-d="6"><span><span class="kw">__be16</span> <span class="name">inet_dport</span> <span class="comment">// porta remota</span></span><span class="val v2">${remotePort}</span></div>
+          <div class="field" data-d="7"><span><span class="kw">struct sk_buff_head</span> <span class="name">sk_receive_queue</span></span><span class="val">aguardando read()</span></div>
+          <div class="queue-note" id="queueNote">${bodyText}</div>
+          <div style="margin-top:10px;color:#8b93a3;">};</div>
+        </div>
+      `;
+      const card = document.getElementById('structCard');
+      requestAnimationFrame(() => card.classList.add('open'));
+      const fields = structHolder.querySelectorAll('.field');
+      fields.forEach((f, idx) => {
+        setTimeout(() => f.classList.add('filled'), 150 + idx * 90);
+      });
+      setTimeout(() => {
+        document.getElementById('queueNote').classList.add('filled');
+      }, 150 + fields.length * 90 + 120);
+    }
+
+    function runMatchAnimation(current, onDone){
+      const rows = Array.from(document.querySelectorAll('#skTable tr.sk-row'));
+      rows.forEach(tr => tr.classList.remove('match','checking','nomatch-flash'));
+
+      let matchIdx = sockets.findIndex(s =>
+        s.state === 'ESTABLISHED' &&
+        s.local === `${current.dstIp}:${current.dstPort}` &&
+        s.remote === `${current.srcIp}:${current.srcPort}`
+      );
+      if(matchIdx === -1){
+        matchIdx = sockets.findIndex(s => s.state === 'LISTEN' && s.local === `${current.dstIp}:${current.dstPort}`);
+      }
+
+      let i = 0;
+      const step = () => {
+        if(i >= rows.length){
+          if(matchIdx >= 0){
+            rows[matchIdx].classList.add('match');
+            onDone(sockets[matchIdx]);
+          }
+          return;
+        }
+        rows.forEach(r => r.classList.remove('checking'));
+        rows[i].classList.add('checking');
+        if(i !== matchIdx){
+          setTimeout(() => { rows[i].classList.remove('checking'); rows[i].classList.add('nomatch-flash'); i++; step(); }, 150);
+        } else {
+          i++;
+          step();
+        }
+      };
+      step();
+    }
+
+    function genPacket(){
+      btnGen.disabled = true;
+      structHolder.innerHTML = '<div class="placeholder">clique em<br>"pacote chegando"</div>';
+      document.querySelectorAll('#skTable tr.sk-row').forEach(tr => tr.classList.remove('match','checking','nomatch-flash'));
+
+      const dstPorts = [22,443,5432];
+      const dstPort = pick(dstPorts);
+      const srcIp = randIp();
+      const srcPort = randEphemeralPort();
+      const bodyText = pick(httpBodies);
+
+      const current = {
+        srcIp, srcPort, dstIp: LOCAL_IP, dstPort,
+        proto:'TCP', flags: Math.random() > 0.5 ? 'ACK' : 'SYN, ACK'
+      };
+
+      pSrc.textContent = `${srcIp}:${srcPort}`;
+      pDst.textContent = `${LOCAL_IP}:${dstPort}`;
+      pProto.textContent = current.proto;
+      pFlags.textContent = current.flags;
+      pBody.textContent = bodyText;
+
+      flyDot(packetCard, skTable, 'amber', () => {
+        runMatchAnimation(current, (matchedSocket) => {
+          const preview = 'bytes aguardando em sk_receive_queue:\n' + bodyText;
+          setTimeout(() => fillStruct(matchedSocket, preview), 200);
+          setTimeout(() => { btnGen.disabled = false; }, 900);
+        });
+      });
+    }
+
+    btnGen.addEventListener('click', genPacket);
+    btnReset.addEventListener('click', () => {
+      pSrc.textContent = pDst.textContent = pProto.textContent = pFlags.textContent = pBody.textContent = '—';
+      structHolder.innerHTML = '<div class="placeholder">clique em<br>"pacote chegando"</div>';
+      document.querySelectorAll('#skTable tr.sk-row').forEach(tr => tr.classList.remove('match','checking','nomatch-flash'));
+      btnGen.disabled = false;
+    });
+  })();
+
+  /* ================= TAB 2: socket -> processo (read) ================= */
+  (function(){
+    const sockHolder = document.getElementById('sockHolder2');
+    const procHolder = document.getElementById('procHolder2');
+    const btnFill = document.getElementById('btnFill2');
+    const btnRead = document.getElementById('btnRead2');
+    const btnReset = document.getElementById('btnReset2');
+
+    let pendingBody = null;
+
+    function sockCardHtml(queueText, filled){
+      const [localIp, localPort] = DATA_SOCK.local.split(':');
+      const [remoteIp, remotePort] = DATA_SOCK.remote.split(':');
+      return `
+        <div class="struct open" id="sockCard2">
+          <div class="struct-title"><span class="kw">struct</span> <span class="type">sock</span> {</div>
+          <div class="field filled"><span><span class="kw">int</span> <span class="name">sk_state</span></span><span class="val v2">${DATA_SOCK.state}</span></div>
+          <div class="field filled"><span><span class="kw">__be16</span> <span class="name">inet_sport</span></span><span class="val">${localPort}</span></div>
+          <div class="field filled"><span><span class="kw">__be16</span> <span class="name">inet_dport</span></span><span class="val v2">${remotePort}</span></div>
+          <div class="field filled"><span><span class="kw">struct sk_buff_head</span> <span class="name">sk_receive_queue</span></span><span class="val">${filled ? 'tem dado' : 'vazia'}</span></div>
+          <div class="queue-note ${filled ? 'filled' : 'filled empty'}" id="queueNote2">${queueText}</div>
+          <div style="margin-top:10px;color:#8b93a3;">};</div>
+        </div>
+      `;
+    }
+
+    function procCardHtml(bufText, hasBuf){
+      return `
+        <div class="proc" id="procCard2">
+          <div class="proc-title">processo ${PROCESS.name}</div>
+          <div class="proc-sub">pid ${PROCESS.pid}</div>
+          <table class="fd-table">
+            <tr class="active-fd"><td>fd 4</td><td class="dim">→</td><td>socket ${DATA_SOCK.local} ↔ ${DATA_SOCK.remote}</td></tr>
+          </table>
+          <div class="code-line">n = read(fd, buf, 1024); <span class="cmt">// bloqueia até ter algo</span></div>
+          <div class="k" style="color:var(--muted);font-size:11px;margin-bottom:4px;">buf (espaço de usuário):</div>
+          <div class="userbuf ${hasBuf ? '' : 'empty'}" id="userBuf2">${hasBuf ? bufText : '(vazio — ainda não leu nada)'}</div>
+        </div>
+      `;
+    }
+
+    function reset(){
+      pendingBody = null;
+      sockHolder.innerHTML = sockCardHtml('(vazia — esperando o próximo pacote)', false);
+      procHolder.innerHTML = procCardHtml('', false);
+      btnFill.disabled = false;
+      btnRead.disabled = true;
+    }
+    reset();
+
+    btnFill.addEventListener('click', () => {
+      pendingBody = pick(httpBodies);
+      sockHolder.innerHTML = sockCardHtml('bytes em sk_receive_queue:\n' + pendingBody, true);
+      procHolder.innerHTML = procCardHtml('', false);
+      btnFill.disabled = true;
+      btnRead.disabled = false;
+    });
+
+    btnRead.addEventListener('click', () => {
+      if(!pendingBody) return;
+      btnRead.disabled = true;
+      const queueEl = document.getElementById('queueNote2');
+      const fromEl = queueEl || sockHolder;
+      flyDot(fromEl, procHolder, 'violet', () => {
+        procHolder.innerHTML = procCardHtml(pendingBody, true);
+        sockHolder.innerHTML = sockCardHtml('(vazia — esperando o próximo pacote)', false);
+        pendingBody = null;
+        btnFill.disabled = false;
+      });
+    });
+
+    btnReset.addEventListener('click', reset);
+  })();
+
+  /* ================= TAB 3: processo -> socket -> rede (write) ================= */
+  (function(){
+    const procHolder = document.getElementById('procHolder3');
+    const sockHolder = document.getElementById('sockHolder3');
+    const outHolder = document.getElementById('outHolder3');
+    const btnPrep = document.getElementById('btnPrep3');
+    const btnWrite = document.getElementById('btnWrite3');
+    const btnSend = document.getElementById('btnSend3');
+    const btnReset = document.getElementById('btnReset3');
+
+    let respText = null;
+
+    function procCardHtml(hasResp){
+      return `
+        <div class="proc" id="procCard3">
+          <div class="proc-title">processo ${PROCESS.name}</div>
+          <div class="proc-sub">pid ${PROCESS.pid} · fd 4</div>
+          <div class="k" style="color:var(--muted);font-size:11px;margin-bottom:4px;">resposta (memória do processo):</div>
+          <div class="userbuf ${hasResp ? '' : 'empty'}" id="respBuf3">${hasResp ? respText : '(vazio — ainda não montou a resposta)'}</div>
+          <div class="code-line">write(fd, resposta, len); <span class="cmt">// pede pro kernel enviar</span></div>
+        </div>
+      `;
+    }
+
+    function sockCardHtml(queueText, filled){
+      const [localIp, localPort] = DATA_SOCK.local.split(':');
+      const [remoteIp, remotePort] = DATA_SOCK.remote.split(':');
+      return `
+        <div class="struct open" id="sockCard3">
+          <div class="struct-title"><span class="kw">struct</span> <span class="type">sock</span> {</div>
+          <div class="field filled"><span><span class="kw">int</span> <span class="name">sk_state</span></span><span class="val v2">${DATA_SOCK.state}</span></div>
+          <div class="field filled"><span><span class="kw">__be16</span> <span class="name">inet_sport</span></span><span class="val">${localPort}</span></div>
+          <div class="field filled"><span><span class="kw">__be16</span> <span class="name">inet_dport</span></span><span class="val v2">${remotePort}</span></div>
+          <div class="field filled"><span><span class="kw">struct sk_buff_head</span> <span class="name">sk_write_queue</span></span><span class="val">${filled ? 'tem dado' : 'vazia'}</span></div>
+          <div class="queue-note ${filled ? 'filled' : 'filled empty'}" id="queueNote3">${queueText}</div>
+          <div style="margin-top:10px;color:#8b93a3;">};</div>
+        </div>
+      `;
+    }
+
+    function outCardHtml(bodyText){
+      const [localIp, localPort] = DATA_SOCK.local.split(':');
+      const [remoteIp, remotePort] = DATA_SOCK.remote.split(':');
+      return `
+        <div class="packet" id="outCard3" style="margin-bottom:0;">
+          <span class="tag">IP + TCP header (saindo)</span>
+          <div class="row"><span class="k">origem</span><span class="v hl">${localIp}:${localPort}</span></div>
+          <div class="row"><span class="k">destino</span><span class="v hl">${remoteIp}:${remotePort}</span></div>
+          <div class="row"><span class="k">protocolo</span><span class="v">TCP</span></div>
+          <div class="row"><span class="k">flags</span><span class="v">ACK, PSH</span></div>
+          <div class="body-block">
+            <span class="k">corpo (o que o processo escreveu)</span>
+            <div class="body-code">${bodyText}</div>
+          </div>
+        </div>
+      `;
+    }
+
+    function reset(){
+      respText = null;
+      procHolder.innerHTML = procCardHtml(false);
+      sockHolder.innerHTML = sockCardHtml('(vazia)', false);
+      outHolder.innerHTML = '<div class="placeholder">aguardando<br>write()</div>';
+      btnPrep.disabled = false;
+      btnWrite.disabled = true;
+      btnSend.disabled = true;
+    }
+    reset();
+
+    btnPrep.addEventListener('click', () => {
+      respText = pick(httpResponses);
+      procHolder.innerHTML = procCardHtml(true);
+      btnPrep.disabled = true;
+      btnWrite.disabled = false;
+    });
+
+    btnWrite.addEventListener('click', () => {
+      if(!respText) return;
+      btnWrite.disabled = true;
+      const fromEl = document.getElementById('respBuf3') || procHolder;
+      flyDot(fromEl, sockHolder, 'teal', () => {
+        sockHolder.innerHTML = sockCardHtml('bytes em sk_write_queue:\n' + respText, true);
+        btnSend.disabled = false;
+      });
+    });
+
+    btnSend.addEventListener('click', () => {
+      btnSend.disabled = true;
+      const fromEl = document.getElementById('queueNote3') || sockHolder;
+      flyDot(fromEl, outHolder, 'amber', () => {
+        outHolder.innerHTML = outCardHtml(respText);
+        sockHolder.innerHTML = sockCardHtml('(vazia — pacote já foi)', false);
+        procHolder.innerHTML = procCardHtml(false);
+        respText = null;
+        btnPrep.disabled = false;
+      });
+    });
+
+    btnReset.addEventListener('click', reset);
+  })();
+
+})();
+</script>
+
+</body>
+</html>

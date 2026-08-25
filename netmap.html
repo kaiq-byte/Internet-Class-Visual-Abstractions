@@ -1,0 +1,613 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>NETMAP // Simulador de Roteamento de Pacotes</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#f7f7f5;
+    --panel:#ffffff;
+    --panel-2:#f1f1ee;
+    --border:#e2e2de;
+    --text:#2b2b28;
+    --text-dim:#8f8f89;
+    --accent:#3d3d3a;
+    --client:#5b7c8f;
+    --router:#a3895f;
+    --isp:#8a7fa3;
+    --core:#4d8f86;
+    --server:#a35d68;
+    --c-direct:#5b8a94;
+    --c-request:#5c85a6;
+    --c-confirm:#5f9c7f;
+    --c-forward:#7e7fa3;
+    --c-response:#ab8256;
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;}
+  body{
+    background:var(--bg);
+    color:var(--text);
+    font-family:'Inter',sans-serif;
+    min-height:100vh;
+    padding:20px;
+  }
+  .app{
+    max-width:1520px;
+    margin:0 auto;
+    border:1px solid var(--border);
+    border-radius:12px;
+    overflow:hidden;
+    background:var(--panel);
+  }
+  header{
+    padding:16px 24px;
+    border-bottom:1px solid var(--border);
+    display:flex;
+    align-items:baseline;
+    justify-content:space-between;
+    gap:16px;
+    flex-wrap:wrap;
+  }
+  header .brand{
+    font-family:'JetBrains Mono',monospace;
+    font-weight:600;
+    letter-spacing:0.3px;
+    font-size:14px;
+    color:#1f1f1c;
+  }
+  header .brand span{ color:var(--accent); font-weight:400; }
+  header p{
+    margin:5px 0 0;
+    font-size:12.5px;
+    color:var(--text-dim);
+    max-width:660px;
+  }
+  header .status{
+    font-family:'JetBrains Mono',monospace;
+    font-size:11px;
+    color:var(--text-dim);
+    display:flex;
+    align-items:center;
+    gap:7px;
+    white-space:nowrap;
+  }
+  header .status .dot{
+    width:7px;height:7px;border-radius:50%;
+    background:var(--accent);
+  }
+  body.busy header .status .dot{ background:var(--c-response); }
+
+  main{ display:grid; grid-template-columns:1fr 340px; }
+  @media (max-width:980px){ main{ grid-template-columns:1fr; } }
+
+  .map-wrap{
+    position:relative;
+    overflow:auto;
+    background:var(--bg);
+    border-right:1px solid var(--border);
+    min-height:540px;
+  }
+  #netmap{ display:block; width:100%; min-width:1180px; height:auto; }
+
+  .edge{
+    stroke:#d9d9d3;
+    stroke-width:1.6;
+    fill:none;
+  }
+  .edge.active{
+    stroke:var(--flow-color, var(--accent));
+    stroke-width:2.2;
+  }
+
+  .node-label{ font-family:'Inter',sans-serif; font-size:11.5px; fill:var(--text-dim); font-weight:500; }
+  .node-tag{ font-family:'JetBrains Mono',monospace; font-size:9px; fill:var(--accent); letter-spacing:0.5px; }
+  .node-icon{ font-size:18px; }
+  .node-main .node-label{ fill:#1f1f1c; font-weight:600; font-size:12.5px; }
+  .node-outer{ fill:none; stroke:none; }
+  .node-main .node-outer{ stroke:#c7c7c1; stroke-width:1; }
+
+  .node-client .node-bg{ fill:rgba(91,124,143,0.08); stroke:var(--client); stroke-width:1.2; }
+  .node-router .node-bg{ fill:rgba(163,137,95,0.08); stroke:var(--router); stroke-width:1.2; }
+  .node-isp .node-bg{ fill:rgba(138,127,163,0.08); stroke:var(--isp); stroke-width:1.2; }
+  .node-core .node-bg{ fill:rgba(77,143,134,0.10); stroke:var(--core); stroke-width:1.5; }
+  .node-server .node-bg{ fill:rgba(163,93,104,0.09); stroke:var(--server); stroke-width:1.3; }
+
+  .node-ring{ fill:none; stroke-width:1.6; opacity:0; }
+  .node.pulse .node-ring{ animation:ringPulse .8s ease-out; }
+  .node.pulse[data-pulse-kind="sending"] .node-ring{ stroke:var(--c-request); }
+  .node.pulse[data-pulse-kind="receiving"] .node-ring{ stroke:var(--c-direct); }
+  .node.pulse[data-pulse-kind="processing"] .node-ring{ stroke:var(--server); }
+  .node.pulse[data-pulse-kind="confirmed"] .node-ring{ stroke:var(--c-confirm); }
+  @keyframes ringPulse{
+    0%{ opacity:.9; transform:scale(0.6); }
+    100%{ opacity:0; transform:scale(1.7); }
+  }
+
+  .packet .halo{ opacity:.28; }
+  .packet .core{ opacity:1; }
+
+  aside.console{ display:flex; flex-direction:column; background:var(--panel); }
+  .controls{ padding:16px; border-bottom:1px solid var(--border); display:flex; flex-direction:column; gap:9px; }
+  .mode-btn{
+    text-align:left;
+    background:var(--panel-2);
+    border:1px solid var(--border);
+    border-radius:9px;
+    padding:11px 12px;
+    cursor:pointer;
+    color:var(--text);
+    transition:border-color .15s, background .15s;
+    font-family:'Inter',sans-serif;
+  }
+  .mode-btn:hover:not(:disabled){ border-color:var(--btn-color,var(--accent)); }
+  .mode-btn:disabled{ opacity:.4; cursor:not-allowed; }
+  .mode-btn .mb-head{
+    display:flex; align-items:center; gap:8px;
+    font-family:'JetBrains Mono',monospace;
+    font-weight:600; font-size:12px;
+    color:#e7edf3; margin-bottom:4px;
+  }
+  .mode-btn .mb-icon{
+    width:20px;height:20px;border-radius:5px;
+    display:flex;align-items:center;justify-content:center;
+    background:rgba(0,0,0,0.04);
+    color:var(--btn-color,var(--accent));
+    font-size:12px;
+  }
+  .mode-btn .mb-desc{ font-size:11px; color:var(--text-dim); line-height:1.5; padding-left:28px; }
+  #btnDirect{ --btn-color:var(--c-direct); }
+  #btnServer{ --btn-color:var(--c-forward); }
+
+  .legend{ padding:13px 16px; border-bottom:1px solid var(--border); font-family:'JetBrains Mono',monospace; }
+  .legend h4{ margin:0 0 7px; font-size:10px; letter-spacing:0.8px; color:var(--text-dim); text-transform:uppercase; font-weight:600; }
+  .chips{ display:flex; flex-wrap:wrap; gap:5px 11px; margin-bottom:9px; }
+  .chips:last-child{ margin-bottom:0; }
+  .chip{ display:flex; align-items:center; gap:5px; font-size:10px; color:var(--text-dim); }
+  .chip i{ width:7px; height:7px; border-radius:50%; display:inline-block; }
+
+  .log-panel{ flex:1; display:flex; flex-direction:column; min-height:180px; }
+  .log-panel-head{
+    padding:9px 16px; font-family:'JetBrains Mono',monospace;
+    font-size:10px; color:var(--text-dim); letter-spacing:0.8px; text-transform:uppercase;
+    display:flex; justify-content:space-between; align-items:center;
+    border-bottom:1px solid var(--border);
+  }
+  .log-panel-head button{
+    background:none; border:1px solid var(--border); color:var(--text-dim);
+    font-family:'JetBrains Mono',monospace; font-size:9.5px; padding:3px 7px;
+    border-radius:4px; cursor:pointer;
+  }
+  #log{ flex:1; overflow-y:auto; padding:10px 16px; font-family:'JetBrains Mono',monospace; font-size:11px; line-height:1.7; background:#fafaf8; }
+  .log-line{ color:var(--text-dim); margin-bottom:2px; }
+  .log-time{ color:#b7b7b0; }
+  .log-line.log-ok{ color:var(--c-confirm); }
+  .log-line.log-proc{ color:var(--server); }
+  .log-line.log-A, .log-line.log-B{ color:var(--client); }
+  #log::-webkit-scrollbar{ width:7px; }
+  #log::-webkit-scrollbar-thumb{ background:#e2e2de; border-radius:4px; }
+
+  @media (prefers-reduced-motion: reduce){
+    .node.pulse .node-ring{ animation:none; }
+  }
+</style>
+</head>
+<body>
+<div class="app">
+  <header>
+    <div>
+      <div class="brand">NETMAP <span>//</span> Simulador de Roteamento de Pacotes</div>
+      <p>Rede com múltiplas redes locais, roteadores, ISPs interligados, um backbone e um servidor de aplicação. A cada clique, dois computadores são sorteados na rede para representar origem e destino.</p>
+    </div>
+    <div class="status"><span class="dot"></span><span id="statusText">OCIOSO</span></div>
+  </header>
+  <main>
+    <div class="map-wrap">
+      <svg id="netmap" viewBox="0 0 1400 740" xmlns="http://www.w3.org/2000/svg">
+        <defs>
+          <pattern id="dotGrid" width="32" height="32" patternUnits="userSpaceOnUse">
+            <circle cx="1" cy="1" r="1" fill="#e2e2dc"/>
+          </pattern>
+        </defs>
+        <rect x="0" y="0" width="1400" height="740" fill="url(#dotGrid)"/>
+        <g id="edgesLayer"></g>
+        <g id="nodesLayer"></g>
+        <g id="packetsLayer"></g>
+      </svg>
+    </div>
+    <aside class="console">
+      <div class="controls">
+        <button class="mode-btn" id="btnDirect">
+          <div class="mb-head"><span class="mb-icon">⇄</span>ENVIO DIRETO (PONTO A PONTO)</div>
+          <div class="mb-desc">Sorteia dois computadores da rede. O pacote sai da origem e percorre roteadores, ISPs e o backbone até chegar direto ao destino, sem passar pelo servidor.</div>
+        </button>
+        <button class="mode-btn" id="btnServer">
+          <div class="mb-head"><span class="mb-icon">🗄</span>ENVIO VIA SERVIDOR</div>
+          <div class="mb-desc">Sorteia dois computadores da rede. A origem envia ao servidor, que confirma o recebimento e encaminha ao destino. A resposta do destino também passa pelo servidor antes de voltar à origem.</div>
+        </button>
+      </div>
+      <div class="legend">
+        <h4>Elementos da rede</h4>
+        <div class="chips">
+          <div class="chip"><i style="background:var(--client)"></i>Cliente</div>
+          <div class="chip"><i style="background:var(--router)"></i>Roteador</div>
+          <div class="chip"><i style="background:var(--isp)"></i>ISP</div>
+          <div class="chip"><i style="background:var(--core)"></i>Backbone</div>
+          <div class="chip"><i style="background:var(--server)"></i>Servidor</div>
+        </div>
+        <h4>Tipos de pacote</h4>
+        <div class="chips">
+          <div class="chip"><i style="background:var(--c-direct)"></i>Direto</div>
+          <div class="chip"><i style="background:var(--c-request)"></i>Requisição</div>
+          <div class="chip"><i style="background:var(--c-confirm)"></i>Confirmação</div>
+          <div class="chip"><i style="background:var(--c-forward)"></i>Encaminhamento</div>
+          <div class="chip"><i style="background:var(--c-response)"></i>Resposta</div>
+        </div>
+      </div>
+      <div class="log-panel">
+        <div class="log-panel-head"><span>Log de transmissão</span><button id="clearLog">limpar</button></div>
+        <div id="log"></div>
+      </div>
+    </aside>
+  </main>
+</div>
+
+<script>
+(function(){
+  const svgNS = "http://www.w3.org/2000/svg";
+
+  const NODES = [
+    // Rede Oeste
+    {id:'A1', x:70,   y:140, type:'client', label:'PC-A1'},
+    {id:'A2', x:70,   y:240, type:'client', label:'PC-A2'},
+    {id:'A3', x:70,   y:460, type:'client', label:'PC-A3'},
+    {id:'A4', x:70,   y:560, type:'client', label:'PC-A4'},
+    {id:'LA', x:250,  y:190, type:'router', label:'Roteador LA'},
+    {id:'LB', x:250,  y:510, type:'router', label:'Roteador LB'},
+    {id:'ISPW1', x:450, y:270, type:'isp', label:'ISP Oeste 1'},
+    {id:'ISPW2', x:450, y:430, type:'isp', label:'ISP Oeste 2'},
+    // Núcleo
+    {id:'SERVER', x:700, y:100, type:'server', label:'Servidor de Aplicação'},
+    {id:'CORE', x:700, y:350, type:'core', label:'Backbone'},
+    {id:'ISPS', x:700, y:520, type:'isp', label:'ISP Sul'},
+    {id:'RS', x:700, y:610, type:'router', label:'Roteador Sul'},
+    {id:'CS1', x:610, y:690, type:'client', label:'PC-S1'},
+    {id:'CS2', x:790, y:690, type:'client', label:'PC-S2'},
+    // Rede Leste
+    {id:'ISPE1', x:950, y:270, type:'isp', label:'ISP Leste 1'},
+    {id:'ISPE2', x:950, y:430, type:'isp', label:'ISP Leste 2'},
+    {id:'RA', x:1150, y:190, type:'router', label:'Roteador RA'},
+    {id:'RB', x:1150, y:510, type:'router', label:'Roteador RB'},
+    {id:'B1', x:1330, y:140, type:'client', label:'PC-B1'},
+    {id:'B2', x:1330, y:240, type:'client', label:'PC-B2'},
+    {id:'B3', x:1330, y:460, type:'client', label:'PC-B3'},
+    {id:'B4', x:1330, y:560, type:'client', label:'PC-B4'},
+  ];
+
+  const EDGES = [
+    ['A1','LA'],['A2','LA'],['A3','LB'],['A4','LB'],
+    ['LA','ISPW1'],['LB','ISPW2'],['ISPW1','ISPW2'],
+    ['ISPW1','CORE'],['ISPW2','CORE'],
+    ['CORE','SERVER'],
+    ['CORE','ISPE1'],['CORE','ISPE2'],['ISPE1','ISPE2'],
+    ['ISPE1','RA'],['ISPE2','RB'],
+    ['RA','B1'],['RA','B2'],['RB','B3'],['RB','B4'],
+    ['CORE','ISPS'],['ISPS','RS'],['RS','CS1'],['RS','CS2'],
+  ];
+
+  const TYPE_RADIUS = { client:20, router:20, isp:22, core:28, server:25 };
+  const TYPE_ICON = { client:'💻', router:'🔀', isp:'☁', core:'🌐', server:'🗄' };
+
+  const nodeMap = {};
+  NODES.forEach(n => nodeMap[n.id] = n);
+
+  const edgesLayer = document.getElementById('edgesLayer');
+  const nodesLayer = document.getElementById('nodesLayer');
+  const packetsLayer = document.getElementById('packetsLayer');
+  const logEl = document.getElementById('log');
+  const statusText = document.getElementById('statusText');
+
+  function edgeKey(a,b){ return [a,b].slice().sort().join('__'); }
+
+  function curveD(x1,y1,x2,y2){
+    const mx = (x1+x2)/2;
+    return 'M '+x1+','+y1+' C '+mx+','+y1+' '+mx+','+y2+' '+x2+','+y2;
+  }
+
+  const edgeEls = {};
+  EDGES.forEach(([a,b]) => {
+    const na = nodeMap[a], nb = nodeMap[b];
+    const path = document.createElementNS(svgNS,'path');
+    path.setAttribute('d', curveD(na.x, na.y, nb.x, nb.y));
+    path.setAttribute('class','edge');
+    edgesLayer.appendChild(path);
+    const length = path.getTotalLength();
+    edgeEls[edgeKey(a,b)] = { el: path, length, a, b };
+  });
+
+  const nodeEls = {};
+  NODES.forEach(n => {
+    const g = document.createElementNS(svgNS,'g');
+    g.setAttribute('class', 'node node-'+n.type);
+    g.setAttribute('transform', 'translate('+n.x+','+n.y+')');
+
+    const r = TYPE_RADIUS[n.type];
+
+    if(n.type === 'client'){
+      const outer = document.createElementNS(svgNS,'circle');
+      outer.setAttribute('class','node-outer');
+      outer.setAttribute('r', r+7);
+      g.appendChild(outer);
+    }
+
+    const ring = document.createElementNS(svgNS,'circle');
+    ring.setAttribute('class','node-ring');
+    ring.setAttribute('r', r+5);
+    g.appendChild(ring);
+
+    const bg = document.createElementNS(svgNS,'circle');
+    bg.setAttribute('class','node-bg');
+    bg.setAttribute('r', r);
+    g.appendChild(bg);
+
+    const icon = document.createElementNS(svgNS,'text');
+    icon.setAttribute('class','node-icon');
+    icon.setAttribute('text-anchor','middle');
+    icon.setAttribute('dy','6');
+    icon.textContent = TYPE_ICON[n.type];
+    g.appendChild(icon);
+
+    const label = document.createElementNS(svgNS,'text');
+    label.setAttribute('class','node-label');
+    label.setAttribute('text-anchor','middle');
+    label.setAttribute('y', r + 18);
+    label.textContent = n.label;
+    g.appendChild(label);
+
+    if(n.type === 'client'){
+      const tag = document.createElementNS(svgNS,'text');
+      tag.setAttribute('class','node-tag');
+      tag.setAttribute('text-anchor','middle');
+      tag.setAttribute('y', r + 31);
+      g.appendChild(tag);
+    }
+
+    nodesLayer.appendChild(g);
+    nodeEls[n.id] = g;
+  });
+
+  // --- Roteamento dinâmico entre quaisquer dois computadores da rede ---
+  const CLIENT_IDS = NODES.filter(n => n.type === 'client').map(n => n.id);
+
+  const adjacency = {};
+  NODES.forEach(n => adjacency[n.id] = []);
+  EDGES.forEach(([a,b]) => { adjacency[a].push(b); adjacency[b].push(a); });
+
+  function bfsPath(startId, endId){
+    if(startId === endId) return [startId];
+    const visited = new Set([startId]);
+    const prev = {};
+    const queue = [startId];
+    while(queue.length){
+      const cur = queue.shift();
+      if(cur === endId) break;
+      for(const nb of adjacency[cur]){
+        if(!visited.has(nb)){
+          visited.add(nb);
+          prev[nb] = cur;
+          queue.push(nb);
+        }
+      }
+    }
+    if(!visited.has(endId)) return null;
+    const path = [endId];
+    let cur = endId;
+    while(cur !== startId){ cur = prev[cur]; path.push(cur); }
+    return path.reverse();
+  }
+
+  function pickPair(){
+    const pool = CLIENT_IDS.slice();
+    const originId = pool.splice(Math.floor(Math.random()*pool.length), 1)[0];
+    const destId = pool[Math.floor(Math.random()*pool.length)];
+    return [originId, destId];
+  }
+
+  function clearRoles(){
+    CLIENT_IDS.forEach(id => {
+      const el = nodeEls[id];
+      el.classList.remove('node-main');
+      const tag = el.querySelector('.node-tag');
+      if(tag) tag.textContent = '';
+    });
+  }
+
+  function setRole(id, text){
+    const el = nodeEls[id];
+    el.classList.add('node-main');
+    const tag = el.querySelector('.node-tag');
+    if(tag) tag.textContent = text;
+  }
+
+  function assignRoles(originId, destId){
+    clearRoles();
+    setRole(originId, 'ORIGEM');
+    setRole(destId, 'DESTINO');
+  }
+
+  function setEdgeActive(a,b,color,active){
+    const edge = edgeEls[edgeKey(a,b)];
+    if(!edge) return;
+    if(active){
+      edge.el.style.setProperty('--flow-color', color);
+      edge.el.classList.add('active');
+    } else {
+      edge.el.classList.remove('active');
+    }
+  }
+
+  function pulse(id, kind){
+    const el = nodeEls[id];
+    if(!el) return;
+    el.classList.remove('pulse');
+    void el.getBoundingClientRect();
+    el.setAttribute('data-pulse-kind', kind);
+    el.classList.add('pulse');
+    setTimeout(() => el.classList.remove('pulse'), 800);
+  }
+
+  function logMsg(text, type){
+    const time = new Date().toLocaleTimeString('pt-BR', {hour12:false});
+    const line = document.createElement('div');
+    line.className = 'log-line log-' + (type||'info');
+    line.innerHTML = '<span class="log-time">['+time+']</span> ' + text;
+    logEl.appendChild(line);
+    logEl.scrollTop = logEl.scrollHeight;
+  }
+
+  function delay(ms){ return new Promise(r => setTimeout(r, ms)); }
+
+  // Traverse a sequence of node ids, moving a packet natively along each
+  // edge's real (curved) SVG path via getPointAtLength — cheap and smooth.
+  function traverse(path, opts){
+    opts = opts || {};
+    const color = opts.color || '#2dd4bf';
+    const speed = opts.speed || 480; // px per second
+
+    const segments = [];
+    let total = 0;
+    for(let i=0; i<path.length-1; i++){
+      const a = path[i], b = path[i+1];
+      const edge = edgeEls[edgeKey(a,b)];
+      const forward = edge.a === a;
+      segments.push({ edge, forward, length: edge.length });
+      total += edge.length;
+    }
+
+    segments.forEach(s => setEdgeActive(s.edge.a, s.edge.b, color, true));
+
+    const g = document.createElementNS(svgNS,'g');
+    g.setAttribute('class','packet');
+    const halo = document.createElementNS(svgNS,'circle');
+    halo.setAttribute('class','halo'); halo.setAttribute('r',10); halo.style.fill = color;
+    const core = document.createElementNS(svgNS,'circle');
+    core.setAttribute('class','core'); core.setAttribute('r',4.5); core.style.fill = color;
+    g.appendChild(halo); g.appendChild(core);
+    packetsLayer.appendChild(g);
+
+    const duration = Math.max(450, (total/speed)*1000);
+
+    return new Promise(resolve => {
+      let startTime = null;
+      function frame(ts){
+        if(startTime === null) startTime = ts;
+        const t = Math.min(1, (ts-startTime)/duration);
+        let dist = t*total;
+        let idx = 0;
+        while(idx < segments.length-1 && dist > segments[idx].length){
+          dist -= segments[idx].length;
+          idx++;
+        }
+        const seg = segments[idx];
+        const localLen = seg.forward ? dist : (seg.length - dist);
+        const pt = seg.edge.el.getPointAtLength(Math.max(0, Math.min(seg.length, localLen)));
+        g.setAttribute('transform', 'translate('+pt.x+','+pt.y+')');
+
+        if(t < 1){
+          requestAnimationFrame(frame);
+        } else {
+          g.remove();
+          segments.forEach(s => setEdgeActive(s.edge.a, s.edge.b, color, false));
+          resolve();
+        }
+      }
+      requestAnimationFrame(frame);
+    });
+  }
+
+  const btnDirect = document.getElementById('btnDirect');
+  const btnServer = document.getElementById('btnServer');
+  const clearLogBtn = document.getElementById('clearLog');
+
+  function setBusy(b){
+    btnDirect.disabled = b;
+    btnServer.disabled = b;
+    document.body.classList.toggle('busy', b);
+    statusText.textContent = b ? 'TRANSMITINDO...' : 'OCIOSO';
+  }
+
+  async function runDirect(){
+    setBusy(true);
+    const [originId, destId] = pickPair();
+    const origin = nodeMap[originId].label, dest = nodeMap[destId].label;
+    assignRoles(originId, destId);
+    logMsg('🎲 Sorteio: <b>'+origin+'</b> (origem) → <b>'+dest+'</b> (destino).', 'ok');
+
+    const path = bfsPath(originId, destId);
+    logMsg(origin+' inicia o envio direto de um pacote para '+dest+'.', 'A');
+    pulse(originId,'sending');
+    await traverse(path, {color:'#33c6d6'});
+    pulse(destId,'receiving');
+    logMsg('Pacote entregue diretamente a '+dest+', percorrendo roteadores, ISPs e o backbone — sem passar pelo servidor de aplicação.', 'ok');
+    setBusy(false);
+  }
+
+  async function runViaServer(){
+    setBusy(true);
+    const [originId, destId] = pickPair();
+    const origin = nodeMap[originId].label, dest = nodeMap[destId].label;
+    assignRoles(originId, destId);
+    logMsg('🎲 Sorteio: <b>'+origin+'</b> (origem) → <b>'+dest+'</b> (destino).', 'ok');
+
+    const pathToServer = bfsPath(originId, 'SERVER');
+    const pathServerToOrigin = pathToServer.slice().reverse();
+    const pathServerToDest = bfsPath('SERVER', destId);
+    const pathDestToServer = pathServerToDest.slice().reverse();
+
+    logMsg(origin+' envia uma requisição para o servidor de aplicação.', 'A');
+    pulse(originId,'sending');
+    await traverse(pathToServer, {color:'#4cb8f0'});
+
+    pulse('SERVER','processing');
+    logMsg('Servidor recebeu a requisição e está processando...', 'proc');
+    await delay(550);
+
+    logMsg('Servidor encaminha a mensagem para '+dest+'.', 'proc');
+    await traverse(pathServerToDest, {color:'#8b93f2'});
+    pulse(destId,'receiving');
+    logMsg(dest+' recebeu a mensagem com sucesso. Servidor confirma o recebimento para '+origin+'.', 'proc');
+    await traverse(pathServerToOrigin, {color:'#4fd69b'});
+    pulse(originId,'confirmed');
+    logMsg(origin+' recebeu a confirmação de entrega.', 'ok');
+    await delay(400);
+
+    logMsg(dest+' envia a resposta para o servidor, a caminho de '+origin+'.', 'B');
+    pulse(destId,'sending');
+    await traverse(pathDestToServer, {color:'#ab8256'});
+
+    pulse('SERVER','processing');
+    logMsg('Servidor recebeu a resposta de '+dest+' e está repassando para '+origin+'.', 'proc');
+    await delay(500);
+
+    logMsg('Servidor envia a resposta final para '+origin+'.', 'proc');
+    await traverse(pathServerToOrigin, {color:'#ab8256'});
+    pulse(originId,'receiving');
+    logMsg(origin+' recebeu a resposta com sucesso. Servidor confirma o recebimento para '+dest+'.', 'proc');
+    await traverse(pathServerToDest, {color:'#5f9c7f'});
+    pulse(destId,'confirmed');
+    logMsg('Comunicação via servidor concluída: confirmação, mensagem, resposta e confirmação de recebimento — tudo passou pelo servidor.', 'ok');
+    setBusy(false);
+  }
+
+  btnDirect.addEventListener('click', runDirect);
+  btnServer.addEventListener('click', runViaServer);
+  clearLogBtn.addEventListener('click', () => { logEl.innerHTML = ''; });
+
+  logMsg('Sistema pronto. Escolha um modo de transmissão — a cada clique, novos computadores são sorteados.', 'ok');
+})();
+</script>
+</body>
+</html>
