@@ -1,0 +1,868 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<title>Animações de protocolo - escolha</title>
+<style>
+  :root{
+    --ink:#1a1a1a;
+    --line:#111111;
+    --blue:#4a7fb5;
+    --red:#c14b3a;
+    --bg:#fbfbfa;
+    --muted:#8a8a8a;
+    --green:#3f8f5f;
+    --amber:#c9932f;
+    --orange:#c9682f;
+  }
+  html,body{
+    min-height:100%;
+    margin:0;
+    background:var(--bg);
+    font-family: 'Segoe UI', 'Trebuchet MS', sans-serif;
+    display:flex;
+    align-items:center;
+    justify-content:flex-start;
+    flex-direction:column;
+    gap:18px;
+    padding:24px 0 40px 0;
+  }
+
+  /* ---------- seletor ---------- */
+  .switcher{
+    display:flex;
+    gap:10px;
+    background:#fff;
+    border:1px solid #ddd;
+    border-radius:999px;
+    padding:5px;
+  }
+  .switcher button{
+    padding:9px 20px;
+    font-size:14px;
+    border-radius:999px;
+    border:none;
+    background:transparent;
+    color:var(--muted);
+    cursor:pointer;
+    font-family:inherit;
+    transition:background .15s ease, color .15s ease;
+  }
+  .switcher button.active{
+    background:var(--ink);
+    color:#fff;
+  }
+  .switcher button:hover:not(.active){
+    background:#f0f0f0;
+    color:var(--ink);
+  }
+
+  .title-wrap{
+    width:min(90vw,900px);
+    text-align:center;
+  }
+  .title{
+    font-size:22px;
+    font-weight:700;
+    color:var(--ink);
+    margin:0 0 6px 0;
+  }
+  .title .arrow{ color:var(--blue); font-weight:700; margin:0 6px; }
+  .subtitle{
+    font-size:15px;
+    font-weight:400;
+    color:var(--muted);
+    line-height:1.5;
+    margin:0;
+  }
+  .subtitle b{ color:var(--ink); font-weight:600; }
+
+  .stage{ width:min(90vw,900px); position:relative; }
+  svg{ width:100%; height:100%; overflow:visible; display:block; }
+
+  .label{ font-size:22px; fill:var(--ink); }
+  .timeline{ stroke:var(--line); stroke-width:3; fill:none; }
+
+  .pkt-text{ font-style:italic; fill:var(--ink); opacity:0; }
+  .ack-text{ fill:var(--ink); opacity:0; }
+  .nak-text{ fill:var(--ink); opacity:0; }
+
+  .event-label{
+    font-size:15px;
+    fill:var(--muted);
+    font-style:italic;
+    opacity:0;
+  }
+
+  .replay-row{ display:flex; justify-content:center; }
+  button.replayBtn{
+    padding:10px 22px;
+    font-size:15px;
+    border-radius:999px;
+    border:1px solid #ccc;
+    background:white;
+    color:var(--ink);
+    cursor:pointer;
+    font-family:inherit;
+  }
+  button.replayBtn:hover{ background:#f0f0f0; border-color:#999; }
+
+  .anim-block{ display:none; flex-direction:column; align-items:center; gap:18px; width:100%; }
+  .anim-block.active{ display:flex; }
+
+  .seg{
+    stroke-linecap:round;
+    fill:none;
+    animation-timing-function: linear;
+    animation-fill-mode: forwards;
+  }
+  @keyframes draw{ to{ stroke-dashoffset: 0; } }
+  @keyframes fadeIn{ to{ opacity:1; } }
+  @keyframes fadeInOut{
+    0%{ opacity:0; }
+    12%{ opacity:1; }
+    88%{ opacity:1; }
+    100%{ opacity:0; }
+  }
+
+  /* =========================================================
+     ANIMAÇÃO 1 — pkt/nak (v1-*)
+     ========================================================= */
+  #v1-pkt1-blue{ stroke:var(--blue); stroke-width:3;
+    stroke-dasharray:381; stroke-dashoffset:381;
+    animation-name:draw; animation-duration:.762s; animation-delay:.3s; }
+  #v1-pkt1-red{ stroke:var(--red); stroke-width:3;
+    stroke-dasharray:95; stroke-dashoffset:95;
+    animation-name:draw; animation-duration:.191s; animation-delay:1.062s; }
+  #v1-pkt1-label{ font-size:19px; animation: fadeIn .3s ease-out forwards; animation-delay:.45s; }
+
+  #v1-nak-line{ stroke:var(--blue); stroke-width:3;
+    stroke-dasharray:471; stroke-dashoffset:471;
+    animation-name:draw; animation-duration:.941s; animation-delay:3.753s; }
+  #v1-nak-label{ font-size:19px; animation: fadeIn .3s ease-out forwards; animation-delay:3.9s; }
+
+  #v1-pkt1b-line{ stroke:var(--blue); stroke-width:3;
+    stroke-dasharray:471; stroke-dashoffset:471;
+    animation-name:draw; animation-duration:.941s; animation-delay:6.094s; }
+  #v1-pkt1b-label{ font-size:19px; animation: fadeIn .3s ease-out forwards; animation-delay:6.25s; }
+
+  #v1-ack-line{ stroke:var(--blue); stroke-width:3;
+    stroke-dasharray:471; stroke-dashoffset:471;
+    animation-name:draw; animation-duration:.941s; animation-delay:9.535s; }
+  #v1-ack-label{ font-size:19px; animation: fadeIn .3s ease-out forwards; animation-delay:9.7s; }
+
+  #v1-ev1{ animation: fadeInOut 1.4s ease-in-out forwards; animation-delay:1.253s; }
+  #v1-ev2{ animation: fadeInOut 1.1s ease-in-out forwards; animation-delay:2.653s; }
+  #v1-ev3{ animation: fadeInOut 1.4s ease-in-out forwards; animation-delay:4.694s; }
+  #v1-ev4{ animation: fadeInOut 1.4s ease-in-out forwards; animation-delay:7.035s; }
+  #v1-ev5{ animation: fadeInOut 1.1s ease-in-out forwards; animation-delay:8.435s; }
+  #v1-ev6{ animation: fadeIn .4s ease-out forwards; animation-delay:10.476s; }
+
+  /* =========================================================
+     ANIMAÇÃO 2 — pkt/seq (v2-*)
+     ========================================================= */
+  #v2-arrow1{ stroke:var(--blue); stroke-width:3;
+    stroke-dasharray:471; stroke-dashoffset:471;
+    animation-name:draw; animation-duration:.9417s; animation-delay:.3s; }
+  #v2-tag1{ font-size:18px; animation: fadeIn .3s ease-out forwards; animation-delay:.45s; }
+
+  #v2-arrow2-blue{ stroke:var(--blue); stroke-width:3;
+    stroke-dasharray:377; stroke-dashoffset:377;
+    animation-name:draw; animation-duration:.7534s; animation-delay:4.8417s; }
+  #v2-arrow2-red{ stroke:var(--red); stroke-width:3;
+    stroke-dasharray:95; stroke-dashoffset:95;
+    animation-name:draw; animation-duration:.1884s; animation-delay:5.5951s; }
+  #v2-tag2{ font-size:19px; animation: fadeIn .3s ease-out forwards; animation-delay:4.99s; }
+
+  #v2-arrow3{ stroke:var(--blue); stroke-width:3;
+    stroke-dasharray:471; stroke-dashoffset:471;
+    animation-name:draw; animation-duration:.9417s; animation-delay:8.5835s; }
+  #v2-tag3{ font-size:18px; animation: fadeIn .3s ease-out forwards; animation-delay:8.73s; }
+
+  #v2-arrow4{ stroke:var(--blue); stroke-width:3;
+    stroke-dasharray:471; stroke-dashoffset:471;
+    animation-name:draw; animation-duration:.9417s; animation-delay:14.5252s; }
+  #v2-tag4{ font-size:19px; animation: fadeIn .3s ease-out forwards; animation-delay:14.68s; }
+
+  #v2-arrow5{ stroke:var(--blue); stroke-width:3;
+    stroke-dasharray:471; stroke-dashoffset:471;
+    animation-name:draw; animation-duration:.9417s; animation-delay:16.5669s; }
+  #v2-tag5{ font-size:18px; animation: fadeIn .3s ease-out forwards; animation-delay:16.72s; }
+
+  #v2-ev1a{ animation: fadeInOut 1.1s ease-in-out forwards; animation-delay:1.2417s; }
+  #v2-ev1b{ animation: fadeInOut 1.4s ease-in-out forwards; animation-delay:2.3417s; }
+  #v2-ev2 { animation: fadeInOut 1.1s ease-in-out forwards; animation-delay:3.7417s; }
+  #v2-ev3a{ animation: fadeInOut 1.4s ease-in-out forwards; animation-delay:5.7835s; }
+  #v2-ev3b{ animation: fadeInOut 1.4s ease-in-out forwards; animation-delay:7.1835s; }
+  #v2-ev4a{ animation: fadeInOut 1.1s ease-in-out forwards; animation-delay:9.5252s; }
+  #v2-ev4b{ animation: fadeInOut 1.4s ease-in-out forwards; animation-delay:10.6252s; }
+  #v2-ev4c{ animation: fadeInOut 1.4s ease-in-out forwards; animation-delay:12.0252s; }
+  #v2-ev5 { animation: fadeInOut 1.1s ease-in-out forwards; animation-delay:13.4252s; }
+  #v2-ev6 { animation: fadeInOut 1.1s ease-in-out forwards; animation-delay:15.4669s; }
+  #v2-ev7a{ animation: fadeInOut 1.1s ease-in-out forwards; animation-delay:17.5086s; }
+  #v2-ev7b{ animation: fadeIn .4s ease-out forwards; animation-delay:18.6086s; }
+
+  /* =========================================================
+     ANIMAÇÃO 3 — SIMULADOR INTERATIVO (v3-*)
+     ========================================================= */
+  .v3-wrap{ width:min(90vw,960px); display:flex; flex-direction:column; gap:14px; align-items:center; }
+
+  .v3-status{
+    display:flex; flex-wrap:wrap; gap:10px; justify-content:center; width:100%;
+  }
+  .v3-badge{
+    background:#fff; border:1px solid #e3e2dd; border-radius:999px;
+    padding:7px 16px; font-size:13.5px; color:var(--ink); display:flex; gap:6px; align-items:center;
+  }
+  .v3-badge b{ color:var(--blue); }
+  .v3-badge.ok b{ color:var(--green); }
+
+  .v3-stage-wrap{
+    width:100%; max-height:480px; overflow-y:auto;
+    background:#fff; border:1px solid #e3e2dd; border-radius:12px;
+    padding:6px 0;
+    scroll-behavior:smooth;
+  }
+  .v3-stage-wrap svg{ display:block; width:100%; height:auto; overflow:visible; }
+
+  .v3-seg{ stroke-linecap:round; fill:none; }
+  .v3-txt{ font-size:14.5px; fill:var(--ink); opacity:0; transition:opacity .25s ease; text-anchor:middle; }
+  .v3-txt.small{ font-size:12.5px; font-style:italic; }
+  .v3-txt.show{ opacity:1; }
+
+  .v3-note{ font-size:13px; fill:var(--muted); font-style:italic; opacity:0; transition:opacity .3s ease; }
+  .v3-note.show{ opacity:1; }
+
+  .v3-panel{
+    width:100%; background:#fff; border:1px solid #e3e2dd; border-radius:12px;
+    padding:16px 18px; text-align:center; display:flex; flex-direction:column; gap:12px; align-items:center;
+  }
+  .v3-prompt{ font-size:15.5px; color:var(--ink); line-height:1.5; min-height:22px; }
+  .v3-prompt b{ font-weight:700; }
+  .v3-choices{ display:flex; flex-wrap:wrap; gap:10px; justify-content:center; }
+
+  .v3-choice{
+    padding:10px 18px; font-size:14.5px; border-radius:999px;
+    background:#fff; cursor:pointer; font-family:inherit; font-weight:600;
+    transition:background .15s ease, transform .1s ease;
+  }
+  .v3-choice:active{ transform:scale(.96); }
+  .v3-choice:disabled{ opacity:.4; cursor:default; }
+  .v3-choice.ok{ border:2px solid var(--green); color:var(--green); }
+  .v3-choice.ok:hover:not(:disabled){ background:var(--green); color:#fff; }
+  .v3-choice.corrupt{ border:2px solid var(--red); color:var(--red); }
+  .v3-choice.corrupt:hover:not(:disabled){ background:var(--red); color:#fff; }
+  .v3-choice.lost{ border:2px solid var(--orange); color:var(--orange); }
+  .v3-choice.lost:hover:not(:disabled){ background:var(--orange); color:#fff; }
+
+  .v3-log-wrap{
+    width:100%; background:#fff; border:1px solid #e3e2dd; border-radius:12px;
+    padding:14px 18px;
+  }
+  .v3-log-title{ font-size:13px; color:var(--muted); font-weight:700; letter-spacing:.03em; text-transform:uppercase; margin:0 0 8px 0; }
+  .v3-log{
+    list-style:decimal; margin:0; padding-left:20px; max-height:170px; overflow-y:auto;
+    display:flex; flex-direction:column; gap:5px;
+  }
+  .v3-log li{ font-size:13.5px; color:var(--ink); line-height:1.4; }
+  .v3-log li.retry{ color:var(--orange); }
+  .v3-log li.success{ color:var(--green); }
+
+  .v3-legend{ display:flex; flex-wrap:wrap; gap:14px; justify-content:center; font-size:12.5px; color:var(--muted); }
+  .v3-legend span{ display:inline-flex; align-items:center; gap:5px; }
+  .v3-dot{ width:10px; height:10px; border-radius:50%; display:inline-block; }
+</style>
+</head>
+<body>
+
+<div class="switcher">
+  <button id="btnV3" class="active">Simulador interativo</button>
+  <button id="btnV1">ACK / NAK</button>
+  <button id="btnV2">Seq numbers</button>
+</div>
+
+<!-- ============================================================
+     ANIMAÇÃO 3 — SIMULADOR INTERATIVO
+     ============================================================ -->
+<div id="blockV3" class="anim-block active">
+
+  <div class="title-wrap">
+    <p class="title">Simulador: Stop-and-Wait / rdt3.0 <span class="arrow">&#8594;</span> escolha o destino de cada envio</p>
+    <p class="subtitle">
+      A cada envio, você decide se o pacote chega <b>OK</b>, chega <b>corrompido</b> ou <b>se perde</b>.
+      O receptor reage de acordo com a lógica real (checksum + número de sequência): pacote corrompido
+      vira <b>NAK</b>, pacote OK e esperado é entregue e vira <b>ACK</b>, pacote OK duplicado é descartado
+      mas ainda gera <b>ACK</b>. Depois você decide o que acontece com essa resposta no caminho de volta.
+      O ACK/NAK carrega o número de sequência a que se refere, como no protocolo real.
+    </p>
+    <p class="subtitle">
+      <b>Nota:</b> isto é o protocolo <b>Stop-and-Wait (rdt3.0)</b> — o modelo didático de transferência
+      confiável de dados (um pacote por vez, ACK/NAK, checksum, timeout, bit de sequência) em que a
+      confiabilidade do TCP se baseia. O TCP em si usa apenas ACK cumulativo (sem NAK), números de
+      sequência por byte e janela deslizante com vários pacotes em voo ao mesmo tempo.
+    </p>
+  </div>
+
+  <div class="v3-wrap">
+    <div class="v3-status">
+      <div class="v3-badge"><span>SEQ atual do emissor:</span> <b id="v3-seq-sender">0</b></div>
+      <div class="v3-badge"><span>Receptor espera SEQ:</span> <b id="v3-seq-receiver">0</b></div>
+      <div class="v3-badge ok"><span>Pacotes entregues:</span> <b id="v3-delivered">0</b></div>
+    </div>
+
+    <div class="v3-stage-wrap" id="v3-stage-wrap">
+      <svg id="v3-svg" viewBox="0 0 900 170" xmlns="http://www.w3.org/2000/svg">
+        <defs>
+          <marker id="v3-tipDown" markerWidth="10" markerHeight="10" refX="3" refY="6" orient="auto">
+            <path d="M0,0 L6,6 L0,12 Z" fill="var(--line)"/>
+          </marker>
+        </defs>
+        <text x="150" y="45" class="label" font-size="20">Sending Side</text>
+        <text x="620" y="45" class="label" font-size="20">Receiving Side</text>
+        <line id="v3-sender-line" x1="220" y1="65" x2="220" y2="150" class="timeline"/>
+        <line id="v3-receiver-line" x1="690" y1="65" x2="690" y2="140" class="timeline" marker-end="url(#v3-tipDown)"/>
+      </svg>
+    </div>
+
+    <div class="v3-panel">
+      <p class="v3-prompt" id="v3-prompt">Carregando…</p>
+      <div class="v3-choices" id="v3-choices"></div>
+    </div>
+
+    <div class="v3-legend">
+      <span><i class="v3-dot" style="background:var(--blue)"></i> pacote</span>
+      <span><i class="v3-dot" style="background:var(--green)"></i> ack</span>
+      <span><i class="v3-dot" style="background:var(--amber)"></i> nak</span>
+      <span><i class="v3-dot" style="background:var(--red)"></i> corrompido</span>
+      <span><i class="v3-dot" style="background:var(--orange)"></i> perdido / timeout</span>
+    </div>
+
+    <div class="v3-log-wrap">
+      <p class="v3-log-title">Histórico de eventos</p>
+      <ol class="v3-log" id="v3-log"></ol>
+    </div>
+
+    <div class="replay-row"><button class="replayBtn" id="v3-reset">Reiniciar simulação</button></div>
+  </div>
+</div>
+
+<!-- ============================================================
+     ANIMAÇÃO 1 — ACK / NAK
+     ============================================================ -->
+<div id="blockV1" class="anim-block">
+
+  <div class="title-wrap">
+    <p class="title">Aqui pacotes podem ir corrompidos <span class="arrow">&#8594;</span> solução ack/nak</p>
+  </div>
+
+  <div class="stage" style="aspect-ratio:900/650;">
+    <svg viewBox="0 0 900 650" xmlns="http://www.w3.org/2000/svg">
+      <defs>
+        <marker id="v1-tipDown" markerWidth="10" markerHeight="10" refX="3" refY="6" orient="auto">
+          <path d="M0,0 L6,6 L0,12 Z" fill="var(--line)"/>
+        </marker>
+      </defs>
+
+      <text x="150" y="60" class="label">Sending Side</text>
+      <text x="620" y="60" class="label">Receiving Side</text>
+
+      <line x1="220" y1="85" x2="220" y2="640" class="timeline"/>
+      <line x1="690" y1="85" x2="690" y2="630" class="timeline" marker-end="url(#v1-tipDown)"/>
+
+      <!-- pkt1 (corrompido no final) -->
+      <line id="v1-pkt1-blue" class="seg" x1="222" y1="150" x2="593" y2="236"/>
+      <line id="v1-pkt1-red"  class="seg" x1="593" y1="236" x2="686" y2="257"/>
+      <text id="v1-pkt1-label" class="pkt-text" x="380" y="185">pkt 1</text>
+
+      <text id="v1-ev1" class="event-label" x="705" y="248">
+        <tspan x="705" dy="0">check corrupted packet</tspan>
+        <tspan x="705" dy="18">with checksum</tspan>
+      </text>
+
+      <!-- nak -->
+      <line id="v1-nak-line" class="seg" x1="688" y1="300" x2="224" y2="378"/>
+      <text id="v1-nak-label" class="nak-text" x="450" y="325">nak</text>
+
+      <text id="v1-ev2" class="event-label" x="705" y="292">packet corrupted</text>
+
+      <text id="v1-ev3" class="event-label" x="205" y="368" text-anchor="end">
+        <tspan x="205" dy="0">if is nak,</tspan>
+        <tspan x="205" dy="18">resend the packet</tspan>
+      </text>
+
+      <!-- pkt1 reenviado -->
+      <line id="v1-pkt1b-line" class="seg" x1="222" y1="420" x2="686" y2="498"/>
+      <text id="v1-pkt1b-label" class="pkt-text" x="380" y="450">pkt 1</text>
+
+      <text id="v1-ev4" class="event-label" x="705" y="490">
+        <tspan x="705" dy="0">check corrupted packet</tspan>
+        <tspan x="705" dy="18">with checksum</tspan>
+      </text>
+
+      <!-- ack final -->
+      <line id="v1-ack-line" class="seg" x1="688" y1="540" x2="224" y2="618"/>
+      <text id="v1-ack-label" class="ack-text" x="460" y="565">ack</text>
+
+      <text id="v1-ev5" class="event-label" x="705" y="532">packet ok</text>
+
+      <text id="v1-ev6" class="event-label" x="205" y="608" text-anchor="end">
+        <tspan x="205" dy="0">if ack,</tspan>
+        <tspan x="205" dy="18">then do nothing</tspan>
+      </text>
+    </svg>
+  </div>
+
+  <div class="replay-row"><button class="replayBtn" data-target="1">Reiniciar animação</button></div>
+</div>
+
+<!-- ============================================================
+     ANIMAÇÃO 2 — SEQ NUMBERS
+     ============================================================ -->
+<div id="blockV2" class="anim-block">
+
+  <div class="title-wrap">
+    <p class="title">Pacotes corrompidos… e o ACK/NAK também</p>
+    <p class="subtitle">
+      <b>Solução:</b> checar se o ACK/NAK está corrompido e reenviar o pacote.
+      Isso cria um novo problema menor: o receiver pode receber <b>pacotes duplicados</b>.
+      <b>Solução:</b> adicionar um número de sequência (seq) ao pacote.
+    </p>
+  </div>
+
+  <div class="stage" style="aspect-ratio:900/800;">
+    <svg viewBox="0 0 900 800" xmlns="http://www.w3.org/2000/svg">
+      <defs>
+        <marker id="v2-tipDown" markerWidth="10" markerHeight="10" refX="3" refY="6" orient="auto">
+          <path d="M0,0 L6,6 L0,12 Z" fill="var(--line)"/>
+        </marker>
+      </defs>
+
+      <text x="150" y="45" class="label">Sending Side</text>
+      <text x="620" y="45" class="label">Receiving Side</text>
+
+      <line x1="220" y1="70" x2="220" y2="780" class="timeline"/>
+      <line x1="690" y1="70" x2="690" y2="770" class="timeline" marker-end="url(#v2-tipDown)"/>
+
+      <!-- Arrow 1: pkt1 SEQ0 -->
+      <line id="v2-arrow1" class="seg" x1="222" y1="140" x2="686" y2="220"/>
+      <text id="v2-tag1" class="pkt-text" x="370" y="162">pkt 1 SEQ 0</text>
+
+      <text id="v2-ev1a" class="event-label" x="705" y="204">Waiting for 0</text>
+      <text id="v2-ev1b" class="event-label" x="705" y="204">
+        <tspan x="705" dy="0">check if packet is</tspan>
+        <tspan x="705" dy="18">corrupted or duplicate</tspan>
+      </text>
+
+      <!-- Arrow 2: ack (corrompe nos ultimos 20%) -->
+      <line id="v2-arrow2-blue" class="seg" x1="688" y1="270" x2="317" y2="334"/>
+      <line id="v2-arrow2-red"  class="seg" x1="317" y1="334" x2="224" y2="350"/>
+      <text id="v2-tag2" class="ack-text" x="450" y="295">ack</text>
+
+      <text id="v2-ev2" class="event-label" x="705" y="259">packet ok</text>
+
+      <text id="v2-ev3a" class="event-label" x="205" y="332" text-anchor="end">
+        <tspan x="205" dy="0">check if ack/nak</tspan>
+        <tspan x="205" dy="18">is corrupted</tspan>
+      </text>
+      <text id="v2-ev3b" class="event-label" x="205" y="332" text-anchor="end">
+        <tspan x="205" dy="0">ack/nak corrupted</tspan>
+        <tspan x="205" dy="18">resending</tspan>
+      </text>
+
+      <!-- Arrow 3: pkt1 SEQ0 reenviado -->
+      <line id="v2-arrow3" class="seg" x1="222" y1="400" x2="686" y2="480"/>
+      <text id="v2-tag3" class="pkt-text" x="370" y="422">pkt 1 SEQ 0</text>
+
+      <text id="v2-ev4a" class="event-label" x="705" y="464">Waiting for 1</text>
+      <text id="v2-ev4b" class="event-label" x="705" y="464">
+        <tspan x="705" dy="0">check if packet is</tspan>
+        <tspan x="705" dy="18">corrupted or duplicate</tspan>
+      </text>
+      <text id="v2-ev4c" class="event-label" x="705" y="464">
+        <tspan x="705" dy="0">packet duplicate</tspan>
+        <tspan x="705" dy="18">don't deliver it</tspan>
+      </text>
+
+      <!-- Arrow 4: ack limpo -->
+      <line id="v2-arrow4" class="seg" x1="688" y1="530" x2="224" y2="610"/>
+      <text id="v2-tag4" class="ack-text" x="460" y="555">ack</text>
+
+      <text id="v2-ev5" class="event-label" x="705" y="519">packet ok</text>
+
+      <text id="v2-ev6" class="event-label" x="205" y="592" text-anchor="end">everything ok</text>
+
+      <!-- Arrow 5: pkt1 SEQ1 -->
+      <line id="v2-arrow5" class="seg" x1="222" y1="660" x2="686" y2="740"/>
+      <text id="v2-tag5" class="pkt-text" x="370" y="682">pkt 1 SEQ 1</text>
+
+      <text id="v2-ev7a" class="event-label" x="705" y="724">Waiting for 1</text>
+      <text id="v2-ev7b" class="event-label" x="705" y="724">
+        <tspan x="705" dy="0">check if packet is</tspan>
+        <tspan x="705" dy="18">corrupted or duplicate</tspan>
+      </text>
+    </svg>
+  </div>
+
+  <div class="replay-row"><button class="replayBtn" data-target="2">Reiniciar animação</button></div>
+</div>
+
+<script>
+  /* ===================== SWITCHER (v1/v2/v3) ===================== */
+  const btnV1 = document.getElementById('btnV1');
+  const btnV2 = document.getElementById('btnV2');
+  const btnV3 = document.getElementById('btnV3');
+  const blockV1 = document.getElementById('blockV1');
+  const blockV2 = document.getElementById('blockV2');
+  const blockV3 = document.getElementById('blockV3');
+
+  // Reinicia as animações CSS de um bloco: clona o SVG (remove/recria os elementos)
+  function restartBlock(block){
+    const svg = block.querySelector('svg');
+    const clone = svg.cloneNode(true);
+    svg.replaceWith(clone);
+  }
+
+  function activate(which){
+    [blockV1, blockV2, blockV3].forEach(b => b.classList.remove('active'));
+    [btnV1, btnV2, btnV3].forEach(b => b.classList.remove('active'));
+    if(which === 1){ blockV1.classList.add('active'); btnV1.classList.add('active'); restartBlock(blockV1); }
+    if(which === 2){ blockV2.classList.add('active'); btnV2.classList.add('active'); restartBlock(blockV2); }
+    if(which === 3){ blockV3.classList.add('active'); btnV3.classList.add('active'); resetV3(); }
+  }
+
+  btnV1.addEventListener('click', () => activate(1));
+  btnV2.addEventListener('click', () => activate(2));
+  btnV3.addEventListener('click', () => activate(3));
+
+  document.querySelectorAll('.replayBtn[data-target]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const target = btn.getAttribute('data-target');
+      restartBlock(target === '1' ? blockV1 : blockV2);
+    });
+  });
+
+  /* ===================== SIMULADOR INTERATIVO (v3) ===================== */
+  const SVGNS = "http://www.w3.org/2000/svg";
+  const v3svg = document.getElementById('v3-svg');
+  const v3senderLine = document.getElementById('v3-sender-line');
+  const v3receiverLine = document.getElementById('v3-receiver-line');
+  const v3stageWrap = document.getElementById('v3-stage-wrap');
+  const v3prompt = document.getElementById('v3-prompt');
+  const v3choices = document.getElementById('v3-choices');
+  const v3log = document.getElementById('v3-log');
+  const v3seqSender = document.getElementById('v3-seq-sender');
+  const v3seqReceiver = document.getElementById('v3-seq-receiver');
+  const v3delivered = document.getElementById('v3-delivered');
+
+  const SENDER_X = 220, RECEIVER_X = 690, ROW_H = 108;
+
+  let v3state, nextY, busy, pendingLeg;
+
+  function resetV3State(){
+    v3state = { senderSeq: 0, expectedSeq: 0, pktNum: 1, delivered: 0 };
+    nextY = 80;
+    busy = false;
+    pendingLeg = null;
+  }
+
+  function resetV3(){
+    resetV3State();
+    document.querySelectorAll('#v3-svg .v3-dynamic').forEach(el => el.remove());
+    v3svg.setAttribute('viewBox', '0 0 900 170');
+    v3senderLine.setAttribute('y2', 150);
+    v3receiverLine.setAttribute('y2', 140);
+    v3log.innerHTML = '';
+    updateStatus();
+    sendPacket(false);
+  }
+
+  function updateStatus(){
+    v3seqSender.textContent = v3state.senderSeq;
+    v3seqReceiver.textContent = v3state.expectedSeq;
+    v3delivered.textContent = v3state.delivered;
+  }
+
+  function logEvent(text, cls){
+    const li = document.createElement('li');
+    li.textContent = text;
+    if(cls) li.className = cls;
+    v3log.appendChild(li);
+    v3log.scrollTop = v3log.scrollHeight;
+  }
+
+  function growCanvas(){
+    const h = nextY + 60;
+    v3svg.setAttribute('viewBox', `0 0 900 ${h}`);
+    v3senderLine.setAttribute('y2', h - 20);
+    v3receiverLine.setAttribute('y2', h - 30);
+    v3stageWrap.scrollTop = v3stageWrap.scrollHeight;
+  }
+
+  function el(tag, attrs){
+    const e = document.createElementNS(SVGNS, tag);
+    for(const k in attrs) e.setAttribute(k, attrs[k]);
+    e.classList.add('v3-dynamic');
+    return e;
+  }
+
+  function makeLine(x1,y1,x2,y2,color){
+    const l = el('line', {x1,y1,x2,y2});
+    l.classList.add('v3-seg');
+    l.style.stroke = color;
+    l.style.strokeWidth = '3';
+    v3svg.appendChild(l);
+    return l;
+  }
+
+  function animateDraw(line, duration){
+    const len = Math.hypot(line.x2.baseVal.value - line.x1.baseVal.value, line.y2.baseVal.value - line.y1.baseVal.value);
+    line.style.strokeDasharray = len;
+    line.style.strokeDashoffset = len;
+    line.getBoundingClientRect();
+    line.style.transition = `stroke-dashoffset ${duration}ms linear`;
+    requestAnimationFrame(() => { line.style.strokeDashoffset = 0; });
+  }
+
+  function makeText(x,y,str,extraClass){
+    const t = el('text', {x,y});
+    t.classList.add('v3-txt');
+    if(extraClass) t.classList.add(extraClass);
+    t.textContent = str;
+    v3svg.appendChild(t);
+    requestAnimationFrame(() => requestAnimationFrame(() => t.classList.add('show')));
+    return t;
+  }
+
+  // legenda de evento (tipo "Waiting for 0", "check corrupted packet with checksum"...)
+  // posicionada ao lado de quem está processando: perto do receptor se x2 for do lado direito,
+  // perto do emissor se x2 for do lado esquerdo — igual ao estilo das animações originais.
+  function addNote(x2, y2, lines, opts){
+    opts = opts || {};
+    const nearReceiver = x2 > 450;
+    const x = nearReceiver ? x2 + 18 : x2 - 18;
+    const anchor = nearReceiver ? 'start' : 'end';
+    const y = y2 - 6 + (opts.yOffset || 0);
+    const t = el('text', { x, y });
+    t.classList.add('v3-note');
+    t.setAttribute('text-anchor', anchor);
+    const arr = Array.isArray(lines) ? lines : [lines];
+    arr.forEach((line, i) => {
+      const tspan = document.createElementNS(SVGNS, 'tspan');
+      tspan.setAttribute('x', x);
+      tspan.setAttribute('dy', i === 0 ? 0 : 16);
+      tspan.textContent = line;
+      t.appendChild(tspan);
+    });
+    v3svg.appendChild(t);
+    const delay = opts.delay || 0;
+    setTimeout(() => t.classList.add('show'), delay);
+    if(opts.duration){
+      setTimeout(() => {
+        t.classList.remove('show');
+        setTimeout(() => t.remove(), 320);
+      }, delay + opts.duration);
+    }
+    return t;
+  }
+
+  // nota temporária, ancorada no ponto de chegada de uma perna já resolvida (leg.x2, leg.y2)
+  function addTempNote(leg, lines, delay, duration){
+    return addNote(leg.x2, leg.y2, lines, { delay, duration });
+  }
+
+  // desenha uma "perna" pendente (cor cinza tracejada) enquanto se aguarda a escolha do usuário
+  function drawPending(direction, label){
+    const y1 = nextY;
+    const y2 = nextY + (ROW_H - 24);
+    nextY += ROW_H;
+    growCanvas();
+    const fwd = direction === 'fwd';
+    const x1 = fwd ? SENDER_X + 2 : RECEIVER_X - 2;
+    const x2 = fwd ? RECEIVER_X - 4 : SENDER_X + 4;
+    const line = makeLine(x1,y1,x2,y2,'var(--muted)');
+    line.style.strokeDasharray = '2 7';
+    line.style.strokeDashoffset = '0';
+    line.style.opacity = '0';
+    requestAnimationFrame(() => { line.style.transition='opacity .3s ease'; line.style.opacity='1'; });
+    const text = makeText((x1+x2)/2, (y1+y2)/2 - 10, label);
+    // enquanto o pacote está a caminho do receptor, mostra o que ele está esperando
+    let waitNote = null;
+    if(fwd){
+      waitNote = addNote(x2, y2, [`Waiting for ${v3state.expectedSeq}`], { delay: 60 });
+    }
+    return { x1,y1,x2,y2, line, text, waitNote };
+  }
+
+  function removePending(leg){
+    leg.line.style.transition = 'opacity .15s ease';
+    leg.line.style.opacity = '0';
+    leg.text.style.opacity = '0';
+    if(leg.waitNote) leg.waitNote.classList.remove('show');
+    setTimeout(() => {
+      leg.line.remove();
+      leg.text.remove();
+      if(leg.waitNote) leg.waitNote.remove();
+    }, 200);
+  }
+
+  // desenha a versão final de uma perna já com o destino decidido
+  function drawFinal(leg, kind, fate, label){
+    const {x1,y1,x2,y2} = leg;
+    if(fate === 'lost'){
+      const xe = x1 + (x2-x1)*0.45, ye = y1 + (y2-y1)*0.45;
+      const line = makeLine(x1,y1,xe,ye,'var(--orange)');
+      line.style.strokeDasharray = '5 6';
+      animateDraw(line, 320);
+      makeText((x1+xe)/2, (y1+ye)/2 - 10, label);
+      const cross = makeText(xe + 14, ye + 4, '✕ perdido', 'small');
+      cross.style.fill = 'var(--orange)';
+      return;
+    }
+    const color = kind === 'packet' ? 'var(--blue)' : (kind === 'ack' ? 'var(--green)' : 'var(--amber)');
+    if(fate === 'corrupt'){
+      const xs = x1 + (x2-x1)*0.78, ys = y1 + (y2-y1)*0.78;
+      const l1 = makeLine(x1,y1,xs,ys,color);
+      animateDraw(l1, 340);
+      const l2 = makeLine(xs,ys,x2,y2,'var(--red)');
+      setTimeout(() => animateDraw(l2, 110), 340);
+    } else {
+      const l = makeLine(x1,y1,x2,y2,color);
+      animateDraw(l, 460);
+    }
+    makeText((x1+x2)/2, (y1+y2)/2 - 10, label);
+  }
+
+  function setChoices(kind){
+    // kind: 'packet' | 'response'
+    v3choices.innerHTML = '';
+    const opts = [
+      { fate:'ok', cls:'ok', label:'Chega OK' },
+      { fate:'corrupt', cls:'corrupt', label: kind === 'packet' ? 'Chega corrompido' : 'Chega corrompida' },
+      { fate:'lost', cls:'lost', label:'Se perde no caminho' },
+    ];
+    opts.forEach(o => {
+      const b = document.createElement('button');
+      b.className = 'v3-choice ' + o.cls;
+      b.textContent = o.label;
+      b.addEventListener('click', () => onChoice(o.fate));
+      v3choices.appendChild(b);
+    });
+  }
+
+  function setBusy(v){
+    busy = v;
+    v3choices.querySelectorAll('button').forEach(b => b.disabled = v);
+  }
+
+  /* ---------- envio do pacote ---------- */
+  function sendPacket(isRetry){
+    setBusy(false);
+    const label = `pkt ${v3state.pktNum} SEQ ${v3state.senderSeq}` + (isRetry ? ' (reenvio)' : '');
+    v3prompt.innerHTML = `📦 Emissor envia <b>${label}</b>, a caminho do receptor. O que acontece com ele?`;
+    logEvent(`Emissor envia ${label}.`);
+    pendingLeg = { leg: drawPending('fwd', label), kind:'packet', label };
+    setChoices('packet');
+  }
+
+  /* ---------- envio da resposta (ack/nak) ---------- */
+  function sendResponse(type){
+    setBusy(false);
+    // o ACK/NAK carrega o SEQ do pacote ao qual se refere — é isso que permite
+    // ao emissor (em teoria) reconhecer uma confirmação velha/duplicada.
+    const label = `${type.toUpperCase()} ${v3state.senderSeq}`;
+    v3prompt.innerHTML = `↩️ Receptor responde com <b>${label}</b>, a caminho do emissor. O que acontece com essa resposta?`;
+    logEvent(`Receptor envia ${label}.`);
+    pendingLeg = { leg: drawPending('bwd', label), kind:'response', respType:type, label };
+    setChoices('response');
+  }
+
+  function onChoice(fate){
+    if(busy) return;
+    setBusy(true);
+    const { leg, kind } = pendingLeg;
+
+    if(kind === 'packet'){
+      drawFinal(leg, 'packet', fate, pendingLeg.label);
+      removePending(leg);
+      handlePacketFate(fate, leg);
+    } else {
+      drawFinal(leg, pendingLeg.respType, fate, pendingLeg.label);
+      removePending(leg);
+      handleResponseFate(fate, leg);
+    }
+  }
+
+  function handlePacketFate(fate, leg){
+    if(fate === 'lost'){
+      addTempNote(leg, ['timeout —', 'no reply arrived'], 250, 1300);
+      logEvent('Pacote perdido no canal — nunca chega ao receptor.', 'retry');
+      setTimeout(() => {
+        logEvent('Timeout no emissor: nenhuma resposta chegou → reenvia o pacote.', 'retry');
+        sendPacket(true);
+      }, 900);
+      return;
+    }
+    if(fate === 'corrupt'){
+      addTempNote(leg, ['check corrupted packet', 'with checksum'], 80, 900);
+      addTempNote(leg, ['packet corrupted'], 950, 1100);
+      logEvent('Pacote chega corrompido: checksum falha no receptor → receptor envia NAK.');
+      setTimeout(() => sendResponse('nak'), 950);
+      return;
+    }
+    // fate === 'ok'
+    addTempNote(leg, ['check if packet is', 'corrupted or duplicate'], 80, 900);
+    if(v3state.senderSeq === v3state.expectedSeq){
+      addTempNote(leg, ['packet ok'], 950, 1100);
+      logEvent(`Pacote chega OK e é o esperado (SEQ ${v3state.senderSeq}) → receptor entrega à aplicação e envia ACK.`);
+      v3state.delivered += 1;
+      v3state.expectedSeq = 1 - v3state.expectedSeq;
+      updateStatus();
+    } else {
+      addTempNote(leg, ['packet duplicate', "don't deliver it"], 950, 1300);
+      logEvent(`Pacote chega OK mas é duplicado (receptor já espera SEQ ${v3state.expectedSeq}) → descarta e reenvia ACK.`);
+    }
+    setTimeout(() => sendResponse('ack'), 950);
+  }
+
+  function handleResponseFate(fate, leg){
+    const type = pendingLeg.respType;
+    const label = pendingLeg.label;
+    if(fate === 'lost'){
+      addTempNote(leg, ['timeout —', 'no reply arrived'], 250, 1300);
+      logEvent(`${label} perdido no canal — nunca chega ao emissor.`, 'retry');
+      setTimeout(() => {
+        logEvent('Timeout no emissor: nenhuma confirmação chegou → reenvia o pacote.', 'retry');
+        sendPacket(true);
+      }, 900);
+      return;
+    }
+    addTempNote(leg, ['check if ack/nak', 'is corrupted'], 80, 900);
+    if(fate === 'corrupt'){
+      addTempNote(leg, ['ack/nak corrupted,', 'resending'], 950, 1300);
+      logEvent(`${label} chega corrompido: emissor não consegue interpretar → trata como perda e reenvia o pacote.`, 'retry');
+      setTimeout(() => sendPacket(true), 950);
+      return;
+    }
+    // fate === 'ok'
+    if(type === 'nak'){
+      addTempNote(leg, ['if is nak,', 'resend the packet'], 950, 1300);
+      logEvent(`${label} chega OK ao emissor → emissor reenvia o pacote.`, 'retry');
+      setTimeout(() => sendPacket(true), 950);
+    } else {
+      addTempNote(leg, ['if ack,', 'then do nothing'], 950, 1300);
+      logEvent(`${label} chega OK ao emissor → confirma a entrega de pkt ${v3state.pktNum}. Emissor avança para o próximo pacote.`, 'success');
+      v3state.pktNum += 1;
+      v3state.senderSeq = 1 - v3state.senderSeq;
+      updateStatus();
+      setTimeout(() => sendPacket(false), 950);
+    }
+  }
+
+  document.getElementById('v3-reset').addEventListener('click', resetV3);
+
+  // estado inicial: v3 já ativo -> inicia o simulador
+  resetV3();
+</script>
+
+</body>
+</html>
