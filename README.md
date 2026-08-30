@@ -20,6 +20,9 @@ Cada visualização traz também suas próprias notas de simplificação, espec�
 |---|---|---|
 | [`pacote-socket-processo.html`](./pacote-socket-processo.html) | Mostra por que "pacote → processo" é enganoso: entre os dois sempre existe um socket (`struct sock` no kernel). Três abas: (1) pacote chegando e sendo casado com a tabela de sockets pela 5-tupla, (2) processo lendo do socket via `read()`, (3) processo escrevendo e o kernel montando o pacote de saída via `write()`. | Sem segmentação/reassembly de TCP, sem buffers de anel/DMA/IRQ/softirqs, sem three-way handshake, sem `accept()` criando socket novo, sem controle de congestionamento. |
 | [`netmap.html`](./netmap.html) | Simulador de roteamento: uma rede fictícia com clientes, roteadores, ISPs, um backbone e um servidor de aplicação. Sorteia origem e destino e anima o pacote percorrendo o caminho (BFS) até o destino — em dois modos: **envio direto** (ponto a ponto) e **envio via servidor** (requisição/processamento/resposta). | Topologia e caminhos são fictícios e simplificados (BFS simples, não roteamento real como BGP/OSPF), sem latência/perda de pacotes realista, sem representar camadas de protocolo (IP, TCP, DNS) dentro da animação. |
+|
+  [`rdt3.0.html`](./rdt3.0.html) 
+|
 
 
 
@@ -30,6 +33,7 @@ Cada visualização traz também suas próprias notas de simplificação, espec�
 ├── README.md
 ├── pacote-socket-processo.html
 ├── netmap.html
+├── rdt3.0.html
 
 ```
 
